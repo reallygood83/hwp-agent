@@ -1,5 +1,22 @@
 # Release Notes
 
+## 0.2.1
+
+### Fixed
+
+- Made the AI Agent visible in the HWP/HWPX document view instead of hiding it behind a small icon.
+- Added a Korean HWP editing command bar with visible actions for new document, edit, save/read mode, AI document reading, AI planning, AI apply, table insertion, and image insertion prompts.
+- Added automatic detection for Claude Code, Codex, and Antigravity CLI paths.
+
+### Changed
+
+- HWP/HWPX files now show the AI Agent side panel by default so users can immediately ask AI to read and plan edits for the document.
+- Settings now include a `Detect now` action that fills AI CLI paths from PATH and common macOS, Linux, Windows, and WSL install locations.
+
+### Verified
+
+- `npm run package:release`
+
 ## 0.2.0
 
 ### Fixed

@@ -23,6 +23,7 @@ import { inflateRawSync } from "zlib";
 import { AntigravityProvider } from "./ai/providers/AntigravityProvider";
 import { ClaudeCodeProvider } from "./ai/providers/ClaudeCodeProvider";
 import { CodexProvider } from "./ai/providers/CodexProvider";
+import { detectCliExecutablePath } from "./ai/providers/cliResolver";
 import {
   DEFAULT_AI_PROVIDER_SETTINGS,
   type RhwpAiProvider,
@@ -119,13 +120,21 @@ const I18N = {
     assetsInstalling: "Installing HWP/HWPX editor assets...",
     assetsInstallFailed: "Failed to install HWP/HWPX editor assets: {{message}}",
     ai: "AI",
-    aiPanelTitle: "AI document editor",
+    aiAgent: "AI Agent",
+    aiPanelTitle: "AI Agent",
     aiProvider: "Provider",
     aiPromptPlaceholder: "Ask AI to read this HWP/HWPX and propose safe operations...",
+    aiTablePrompt: "Read this HWP/HWPX document and insert an editable table that fits the current document context. Return only the valid operation JSON.",
+    aiImagePrompt: "Read this HWP/HWPX document and insert an image from the vault where it best fits the current document context. Return only the valid operation JSON.",
     aiReadContext: "Read context",
     aiDiagnose: "Diagnose",
     aiPlan: "Plan",
     aiApply: "Apply",
+    hwpTools: "HWP tools",
+    hwpNew: "New",
+    hwpStartEdit: "Start edit",
+    hwpTable: "Table",
+    hwpImage: "Image",
     aiNoContext: "No document context yet. Open a document or click Read context.",
     aiContextReady: "{{paragraphs}} paragraphs · {{tables}} tables · {{images}} images",
     aiRunning: "AI is planning operations...",
@@ -146,6 +155,11 @@ const I18N = {
     settingTitle: "HWP Agent - AI rHWP Editor",
     settingAiProviderName: "Default AI provider",
     settingAiProviderDesc: "Choose the local CLI used for operation planning.",
+    settingAutoDetectCliName: "Auto-detect AI CLI paths",
+    settingAutoDetectCliDesc: "Find Claude Code, Codex, and Antigravity on PATH and common macOS, Linux, Windows, and WSL install locations.",
+    settingAutoDetectCliButton: "Detect now",
+    settingAutoDetectCliNone: "No new AI CLI paths found.",
+    settingAutoDetectCliFound: "Detected {{count}} AI CLI path(s).",
     settingClaudePathName: "Claude Code CLI path",
     settingCodexPathName: "Codex CLI path",
     settingAntigravityPathName: "Antigravity CLI path",
@@ -195,13 +209,21 @@ const I18N = {
     assetsInstalling: "HWP/HWPX 편집기 자산을 설치하는 중...",
     assetsInstallFailed: "HWP/HWPX 편집기 자산 설치 실패: {{message}}",
     ai: "AI",
-    aiPanelTitle: "AI 문서 편집기",
+    aiAgent: "AI Agent",
+    aiPanelTitle: "AI Agent",
     aiProvider: "제공자",
     aiPromptPlaceholder: "AI에게 이 HWP/HWPX 문서를 읽고 안전한 작업을 제안하게 하세요...",
+    aiTablePrompt: "이 HWP/HWPX 문서를 읽고 현재 문맥에 맞는 편집 가능한 표를 삽입해줘. 유효한 operation JSON만 반환해줘.",
+    aiImagePrompt: "이 HWP/HWPX 문서를 읽고 볼트에 있는 이미지를 현재 문맥에 맞는 위치에 삽입해줘. 유효한 operation JSON만 반환해줘.",
     aiReadContext: "문서 읽기",
     aiDiagnose: "진단",
     aiPlan: "계획",
     aiApply: "적용",
+    hwpTools: "한글 편집",
+    hwpNew: "새 문서",
+    hwpStartEdit: "편집 시작",
+    hwpTable: "표 삽입",
+    hwpImage: "이미지 삽입",
     aiNoContext: "아직 문서 컨텍스트가 없습니다. 문서를 열거나 문서 읽기를 누르세요.",
     aiContextReady: "문단 {{paragraphs}}개 · 표 {{tables}}개 · 이미지 {{images}}개",
     aiRunning: "AI가 작업을 계획하는 중...",
@@ -222,6 +244,11 @@ const I18N = {
     settingTitle: "HWP Agent - AI rHWP Editor",
     settingAiProviderName: "기본 AI 제공자",
     settingAiProviderDesc: "작업 계획에 사용할 로컬 CLI를 선택합니다.",
+    settingAutoDetectCliName: "AI CLI 경로 자동 감지",
+    settingAutoDetectCliDesc: "PATH와 macOS, Linux, Windows, WSL의 일반 설치 위치에서 Claude Code, Codex, Antigravity를 찾습니다.",
+    settingAutoDetectCliButton: "지금 감지",
+    settingAutoDetectCliNone: "새로 찾은 AI CLI 경로가 없습니다.",
+    settingAutoDetectCliFound: "AI CLI 경로 {{count}}개를 감지했습니다.",
     settingClaudePathName: "Claude Code CLI 경로",
     settingCodexPathName: "Codex CLI 경로",
     settingAntigravityPathName: "Antigravity CLI 경로",
@@ -313,10 +340,43 @@ export default class RhwpPlugin extends Plugin {
       ...DEFAULT_SETTINGS,
       ...parseSettings(await this.loadData())
     };
+
+    const detected = this.detectMissingCliPaths();
+    if (detected.length > 0) {
+      await this.saveSettings();
+    }
   }
 
   async saveSettings(): Promise<void> {
     await this.saveData(this.settings);
+  }
+
+  detectMissingCliPaths(overwrite = false): RhwpAiProviderId[] {
+    const detected: RhwpAiProviderId[] = [];
+    const targets: Array<{
+      id: RhwpAiProviderId;
+      key: "claudeCliPath" | "codexCliPath" | "antigravityCliPath";
+    }> = [
+      { id: "claude", key: "claudeCliPath" },
+      { id: "codex", key: "codexCliPath" },
+      { id: "antigravity", key: "antigravityCliPath" }
+    ];
+
+    for (const target of targets) {
+      if (!overwrite && this.settings.ai[target.key].trim()) {
+        continue;
+      }
+
+      const executablePath = detectCliExecutablePath(target.id);
+      if (!executablePath) {
+        continue;
+      }
+
+      this.settings.ai[target.key] = executablePath;
+      detected.push(target.id);
+    }
+
+    return detected;
   }
 
   async ensureRhwpReady(): Promise<void> {
@@ -955,11 +1015,14 @@ class RhwpFileView extends FileView {
 
     const aiButton = toolbarEl.createEl("button", { attr: { "aria-label": t("ai"), title: t("ai") } });
     setIcon(aiButton, "bot");
-    aiButton.toggleClass("is-active", this.plugin.settings.aiPanelOpen);
+    aiButton.addClass("rhwp-ai-agent-button");
+    aiButton.createSpan({ text: t("aiAgent") });
+    aiButton.toggleClass("is-active", this.plugin.settings.aiPanelOpen || !!file);
     aiButton.addEventListener("click", () => {
-      this.plugin.settings.aiPanelOpen = !this.plugin.settings.aiPanelOpen;
-      void this.plugin.saveSettings().then(() => this.render());
+      void this.openAgentPanel();
     });
+
+    this.renderCommandBar(file);
 
     if (!file) {
       this.createWorkspace();
@@ -1013,9 +1076,72 @@ class RhwpFileView extends FileView {
     const workspaceEl = this.contentEl.createDiv({ cls: "rhwp-workspace" });
     this.pagesEl = workspaceEl.createDiv({ cls: "rhwp-pages" });
     this.aiPanelEl = null;
-    if (this.plugin.settings.aiPanelOpen) {
+    if (this.plugin.settings.aiPanelOpen || this.currentFile) {
       this.renderAiPanel(workspaceEl);
     }
+  }
+
+  private renderCommandBar(file: TFile | null): void {
+    const barEl = this.contentEl.createDiv({ cls: "rhwp-command-bar" });
+    barEl.createDiv({ cls: "rhwp-command-title", text: t("hwpTools") });
+
+    this.createCommandButton(barEl, "file-plus", t("hwpNew"), () => this.plugin.createNewFile(file ?? undefined));
+
+    if (this.mode === "read") {
+      this.createCommandButton(barEl, "pencil", t("hwpStartEdit"), () => this.enableEditMode(), !file);
+    } else {
+      this.createCommandButton(barEl, "save", t("save"), () => this.saveEdits(), !file);
+      this.createCommandButton(barEl, "book-open", t("backToReadOnly"), () => this.enableReadMode(), !file);
+    }
+
+    this.createCommandButton(barEl, "file-search", t("aiReadContext"), () => this.openAgentAndRun(() => this.refreshDocumentContext()), !file);
+    this.createCommandButton(barEl, "bot", t("aiAgent"), () => this.openAgentPanel());
+    this.createCommandButton(barEl, "send", t("aiPlan"), () => this.openAgentAndRun(() => this.planWithSelectedProvider()), !file);
+    this.createCommandButton(barEl, "wand-sparkles", t("aiApply"), () => this.openAgentAndRun(() => this.applyLastOperationEnvelope()), !file);
+    this.createCommandButton(barEl, "table-2", t("hwpTable"), () => this.openAgentWithPrompt(t("aiTablePrompt")), !file);
+    this.createCommandButton(barEl, "image", t("hwpImage"), () => this.openAgentWithPrompt(t("aiImagePrompt")), !file);
+  }
+
+  private createCommandButton(
+    containerEl: HTMLElement,
+    icon: string,
+    label: string,
+    handler: () => void | Promise<void>,
+    disabled = false
+  ): void {
+    const button = containerEl.createEl("button", {
+      cls: "rhwp-command-button",
+      attr: { title: label, "aria-label": label }
+    });
+    button.disabled = disabled;
+    setIcon(button, icon);
+    button.createSpan({ text: label });
+    button.addEventListener("click", () => {
+      void handler();
+    });
+  }
+
+  private async openAgentPanel(): Promise<void> {
+    if (!this.plugin.settings.aiPanelOpen) {
+      this.plugin.settings.aiPanelOpen = true;
+      await this.plugin.saveSettings();
+      await this.render();
+    }
+
+    this.aiPromptEl?.focus();
+  }
+
+  private async openAgentWithPrompt(prompt: string): Promise<void> {
+    await this.openAgentPanel();
+    if (this.aiPromptEl) {
+      this.aiPromptEl.value = prompt;
+      this.aiPromptEl.focus();
+    }
+  }
+
+  private async openAgentAndRun(action: () => Promise<void>): Promise<void> {
+    await this.openAgentPanel();
+    await action();
   }
 
   private renderAiPanel(workspaceEl: HTMLElement): void {
@@ -1700,6 +1826,24 @@ class RhwpSettingTab extends PluginSettingTab {
           .onChange(async (value) => {
             this.rhwpPlugin.settings.aiProvider = normalizeProviderId(value);
             await this.rhwpPlugin.saveSettings();
+          });
+      });
+
+    new Setting(containerEl)
+      .setName(t("settingAutoDetectCliName"))
+      .setDesc(t("settingAutoDetectCliDesc"))
+      .addButton((button) => {
+        button
+          .setButtonText(t("settingAutoDetectCliButton"))
+          .onClick(async () => {
+            const detected = this.rhwpPlugin.detectMissingCliPaths(true);
+            await this.rhwpPlugin.saveSettings();
+            new Notice(
+              detected.length > 0
+                ? t("settingAutoDetectCliFound", { count: detected.length })
+                : t("settingAutoDetectCliNone")
+            );
+            this.display();
           });
       });
 

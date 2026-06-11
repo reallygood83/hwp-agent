@@ -76,6 +76,22 @@ export function resolveCli(kind: CliKind, customPath?: string, pathValue?: strin
   };
 }
 
+export function detectCliExecutablePath(kind: CliKind, pathValue?: string): string | null {
+  const names = cliNames(kind);
+  for (const entry of pathEntries(pathValue)) {
+    for (const name of names) {
+      const candidate = path.join(entry, name);
+      if (isFile(candidate)) return candidate;
+    }
+  }
+
+  for (const candidate of defaultCandidates(kind)) {
+    if (isFile(candidate)) return candidate;
+  }
+
+  return resolveWsl(kind)?.executablePath ?? null;
+}
+
 function resolutionForPath(kind: CliKind, executablePath: string): CliResolution {
   if (process.platform === "win32" && kind === "codex" && /\.cmd$/i.test(executablePath)) {
     const codexJs = path.join(
@@ -177,4 +193,3 @@ function wslHasCommand(wslPath: string, target: string): boolean {
   });
   return result.status === 0;
 }
-

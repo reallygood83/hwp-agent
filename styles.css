@@ -17,6 +17,17 @@
   padding: 6px 10px;
 }
 
+.rhwp-toolbar button {
+  align-items: center;
+  display: inline-flex;
+  gap: 6px;
+}
+
+.rhwp-ai-agent-button {
+  color: var(--text-accent);
+  font-weight: 600;
+}
+
 .rhwp-title {
   flex: 1 1 auto;
   font-weight: 600;
@@ -90,6 +101,35 @@
   padding: 24px;
 }
 
+.rhwp-command-bar {
+  align-items: center;
+  background: var(--background-primary);
+  border-bottom: 1px solid var(--background-modifier-border);
+  display: flex;
+  flex: 0 0 auto;
+  gap: 8px;
+  min-height: 42px;
+  overflow-x: auto;
+  padding: 6px 10px;
+}
+
+.rhwp-command-title {
+  color: var(--text-muted);
+  flex: 0 0 auto;
+  font-size: var(--font-ui-smaller);
+  font-weight: 700;
+  margin-right: 2px;
+}
+
+.rhwp-command-button {
+  align-items: center;
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 6px;
+  min-height: 30px;
+  white-space: nowrap;
+}
+
 .rhwp-workspace {
   display: flex;
   flex: 1 1 auto;
@@ -104,7 +144,7 @@
   background: var(--background-primary);
   border-left: 1px solid var(--background-modifier-border);
   display: flex;
-  flex: 0 0 340px;
+  flex: 0 0 min(360px, 34vw);
   flex-direction: column;
   gap: 10px;
   min-height: 0;
@@ -120,6 +160,11 @@
 .rhwp-ai-title {
   color: var(--text-normal);
   font-weight: 700;
+}
+
+.rhwp-ai-title::before {
+  color: var(--text-accent);
+  content: "AI ";
 }
 
 .rhwp-ai-row {
@@ -154,7 +199,7 @@
 .rhwp-ai-actions {
   display: grid;
   gap: 8px;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .rhwp-ai-actions button {
@@ -317,4 +362,16 @@
 
 .rhwp-secondary-button {
   color: var(--text-muted);
+}
+
+@media (max-width: 980px) {
+  .rhwp-workspace {
+    flex-direction: column;
+  }
+
+  .rhwp-ai-panel {
+    border-left: 0;
+    border-top: 1px solid var(--background-modifier-border);
+    flex: 0 0 280px;
+  }
 }
