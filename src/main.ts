@@ -137,6 +137,13 @@ const I18N = {
     aiPlan: "AI 생성",
     aiApply: "적용",
     aiUndo: "되돌리기",
+    aiNewTask: "새 작업",
+    aiStop: "종료",
+    aiNewTaskReady: "새 AI 작업을 시작합니다.",
+    aiStopRequested: "실행 중인 AI 작업을 종료했습니다.",
+    aiStopUnavailable: "종료할 AI 작업이 없습니다.",
+    aiCancelled: "AI 작업이 종료되었습니다.",
+    aiBusy: "AI 작업이 이미 실행 중입니다. 종료하거나 완료된 뒤 다시 시도하세요.",
     aiSelectContext: "선택 영역",
     hwpTools: "한글 편집",
     hwpNew: "새 문서",
@@ -239,6 +246,13 @@ const I18N = {
     aiPlan: "AI 생성",
     aiApply: "적용",
     aiUndo: "되돌리기",
+    aiNewTask: "새 작업",
+    aiStop: "종료",
+    aiNewTaskReady: "새 AI 작업을 시작합니다.",
+    aiStopRequested: "실행 중인 AI 작업을 종료했습니다.",
+    aiStopUnavailable: "종료할 AI 작업이 없습니다.",
+    aiCancelled: "AI 작업이 종료되었습니다.",
+    aiBusy: "AI 작업이 이미 실행 중입니다. 종료하거나 완료된 뒤 다시 시도하세요.",
     aiSelectContext: "선택 영역",
     hwpTools: "한글 편집",
     hwpNew: "새 문서",
@@ -957,6 +971,8 @@ class RhwpFileView extends FileView {
   private lastSelectedContext: RhwpSelectionContext | null = null;
   private lastOperationEnvelope: RhwpOperationEnvelope | null = null;
   private lastUndoSnapshot: RhwpUndoSnapshot | null = null;
+  private activeProvider: RhwpAiProvider | null = null;
+  private activeAiRunId = 0;
   private metaEl: HTMLElement | null = null;
   private currentFile: TFile | null = null;
   private mode: RhwpMode = "read";
@@ -993,6 +1009,7 @@ class RhwpFileView extends FileView {
         return;
       }
       this.mode = "read";
+      this.cancelActiveAiTask(false);
       this.lastDocumentContext = null;
       this.lastSelectedContext = null;
       this.lastOperationEnvelope = null;
@@ -1018,6 +1035,7 @@ class RhwpFileView extends FileView {
     }
 
     this.destroyEditor();
+    this.cancelActiveAiTask(false);
     this.currentFile = null;
     this.contentEl.empty();
   }
@@ -1037,6 +1055,7 @@ class RhwpFileView extends FileView {
       return;
     }
 
+    this.cancelActiveAiTask(false);
     this.destroyEditor();
     await super.onClose();
   }
@@ -1282,6 +1301,8 @@ class RhwpFileView extends FileView {
     });
 
     const actionsEl = this.aiPanelEl.createDiv({ cls: "rhwp-ai-actions" });
+    this.createAiActionButton(actionsEl, "plus-circle", t("aiNewTask"), () => this.startNewAiTask());
+    this.createAiActionButton(actionsEl, "circle-stop", t("aiStop"), () => this.stopActiveAiTask());
     this.createAiActionButton(actionsEl, "file-search", t("aiReadContext"), () => this.refreshDocumentContext());
     this.createAiActionButton(actionsEl, "scan-text", t("aiSelectContext"), () => this.captureSelectedContext());
     this.createAiActionButton(actionsEl, "activity", t("aiDiagnose"), () => this.diagnoseSelectedProvider());
@@ -1306,6 +1327,44 @@ class RhwpFileView extends FileView {
     button.addEventListener("click", () => {
       void handler();
     });
+  }
+
+  private startNewAiTask(): void {
+    this.cancelActiveAiTask(false);
+    this.lastSelectedContext = null;
+    this.lastOperationEnvelope = null;
+    if (this.lastDocumentContext) {
+      this.lastDocumentContext.selectedText = null;
+    }
+    if (this.aiPromptEl) {
+      this.aiPromptEl.value = "";
+      this.aiPromptEl.focus();
+    }
+    this.updateAiPanelStatus();
+    this.writeAiOutput(t("aiNewTaskReady"));
+    new Notice(t("aiNewTaskReady"));
+  }
+
+  private stopActiveAiTask(): void {
+    if (!this.activeProvider) {
+      new Notice(t("aiStopUnavailable"));
+      this.writeAiOutput(t("aiStopUnavailable"));
+      return;
+    }
+
+    this.cancelActiveAiTask(true);
+  }
+
+  private cancelActiveAiTask(showNotice: boolean): void {
+    const provider = this.activeProvider;
+    this.activeAiRunId += 1;
+    this.activeProvider = null;
+    provider?.cancel();
+
+    if (showNotice) {
+      new Notice(t("aiStopRequested"));
+      this.writeAiOutput(t("aiCancelled"));
+    }
   }
 
   private updateAiPanelStatus(statusEl?: HTMLElement): void {
@@ -1414,6 +1473,10 @@ class RhwpFileView extends FileView {
 
   private async planWithSelectedProvider(): Promise<boolean> {
     if (!this.currentFile) return false;
+    if (this.activeProvider) {
+      new Notice(t("aiBusy"));
+      return false;
+    }
     if (!this.lastDocumentContext) {
       await this.refreshDocumentContext();
     }
@@ -1430,27 +1493,38 @@ class RhwpFileView extends FileView {
     if (!request) return false;
 
     const provider = this.createSelectedProvider();
+    const runId = this.activeAiRunId + 1;
+    this.activeAiRunId = runId;
+    this.activeProvider = provider;
     this.writeAiOutput(t("aiRunning"));
     let response = "";
     const progressLog = [t("aiRunning")];
-    for await (const event of provider.query({
-      userRequest: request,
-      cwd: this.getVaultPath(),
-      locale: getLocale(),
-      documentContext: this.lastDocumentContext,
-      selectedContext: this.lastSelectedContext
-    })) {
-      if (event.type === "text") response += event.content;
-      if (event.type === "progress") {
-        progressLog.push(event.content);
-        this.writeAiOutput(progressLog.join("\n"));
+    try {
+      for await (const event of provider.query({
+        userRequest: request,
+        cwd: this.getVaultPath(),
+        locale: getLocale(),
+        documentContext: this.lastDocumentContext,
+        selectedContext: this.lastSelectedContext
+      })) {
+        if (runId !== this.activeAiRunId) return false;
+        if (event.type === "text") response += event.content;
+        if (event.type === "progress") {
+          progressLog.push(event.content);
+          this.writeAiOutput(progressLog.join("\n"));
+        }
+        if (event.type === "error") {
+          progressLog.push(event.content);
+          this.writeAiOutput(progressLog.join("\n"), true);
+        }
       }
-      if (event.type === "error") {
-        progressLog.push(event.content);
-        this.writeAiOutput(progressLog.join("\n"), true);
+    } finally {
+      if (this.activeProvider === provider) {
+        this.activeProvider = null;
       }
     }
 
+    if (runId !== this.activeAiRunId) return false;
     if (!response.trim()) return false;
     this.writeAiOutput(response.trim());
     try {

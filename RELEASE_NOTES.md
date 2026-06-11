@@ -1,5 +1,21 @@
 # Release Notes
 
+## 0.2.6
+
+### Added
+
+- Added `새 작업` to reset the AI prompt, selected context, and pending operation JSON without closing the HWP/HWPX document.
+- Added `종료` to stop the currently running Claude Code, Codex, or Antigravity provider from the AI panel.
+
+### Fixed
+
+- Hardened AI CLI cancellation so macOS/Linux process groups and Windows child process trees are terminated instead of leaving long-running Codex/Claude/Antigravity work behind.
+- Ignored stale AI output after cancellation so an old response cannot reappear as an apply-ready operation.
+
+### Verified
+
+- `npm run package:release`
+
 ## 0.2.5
 
 ### Fixed

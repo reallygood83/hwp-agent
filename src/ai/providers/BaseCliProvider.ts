@@ -21,7 +21,19 @@ export abstract class BaseCliProvider implements RhwpAiProvider {
   abstract query(input: RhwpAiQuery): AsyncGenerator<RhwpAiEvent>;
 
   cancel(): void {
-    this.currentProcess?.kill();
+    const child = this.currentProcess;
+    if (!child) return;
+
+    this.terminateProcessTree(child, "SIGTERM");
+    let closed = false;
+    child.once("close", () => {
+      closed = true;
+    });
+    setTimeout(() => {
+      if (!closed) {
+        this.terminateProcessTree(child, "SIGKILL");
+      }
+    }, 1500);
     this.currentProcess = null;
   }
 
@@ -72,6 +84,7 @@ export abstract class BaseCliProvider implements RhwpAiProvider {
       env: this.environment(resolution),
       stdio: ["pipe", "pipe", "pipe"],
       shell: resolution.shell,
+      detached: process.platform !== "win32",
       windowsHide: true
     });
     this.currentProcess = child;
@@ -180,6 +193,27 @@ export abstract class BaseCliProvider implements RhwpAiProvider {
     if (this.id === "codex") return settings.codexCliPath;
     if (this.id === "antigravity") return settings.antigravityCliPath;
     return settings.claudeCliPath;
+  }
+
+  private terminateProcessTree(child: ChildProcess, signal: NodeJS.Signals): void {
+    if (!child.pid) return;
+
+    if (process.platform === "win32") {
+      const killer = spawn("taskkill", ["/pid", String(child.pid), "/t", "/f"], {
+        stdio: "ignore",
+        windowsHide: true
+      });
+      killer.on("error", () => {
+        child.kill(signal);
+      });
+      return;
+    }
+
+    try {
+      process.kill(-child.pid, signal);
+    } catch {
+      child.kill(signal);
+    }
   }
 
   private readTextFile(filePath: string): string {
