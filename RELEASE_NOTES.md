@@ -1,5 +1,21 @@
 # Release Notes
 
+## 0.2.0
+
+### Fixed
+
+- Kept the HWP Agent settings tab, commands, and ribbon button available even when another rHWP plugin already registered `.hwp` / `.hwpx` extensions.
+- Hardened plugin startup so one optional Obsidian registration failure no longer aborts the rest of `onload()`.
+
+### Changed
+
+- Register settings and command palette actions before file-extension ownership, making BRAT installs visibly configurable even in mixed rHWP setups.
+- Renamed the settings tab title to `HWP Agent - AI rHWP Editor` for easier discovery.
+
+### Verified
+
+- `npm run package:release`
+
 ## 0.1.3
 
 ### Added

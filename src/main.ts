@@ -143,7 +143,7 @@ const I18N = {
     settingLargeFileAsk: "Ask before opening",
     settingLargeFileThresholdDesc: "Files larger than this size can be slower to render.",
     settingLargeFileThresholdName: "Large file threshold (MB)",
-    settingTitle: "AI rHWP Editor",
+    settingTitle: "HWP Agent - AI rHWP Editor",
     settingAiProviderName: "Default AI provider",
     settingAiProviderDesc: "Choose the local CLI used for operation planning.",
     settingClaudePathName: "Claude Code CLI path",
@@ -219,7 +219,7 @@ const I18N = {
     settingLargeFileAsk: "열기 전에 묻기",
     settingLargeFileThresholdDesc: "이 용량보다 큰 파일은 렌더링이 느릴 수 있습니다.",
     settingLargeFileThresholdName: "큰 파일 기준 용량(MB)",
-    settingTitle: "AI rHWP Editor",
+    settingTitle: "HWP Agent - AI rHWP Editor",
     settingAiProviderName: "기본 AI 제공자",
     settingAiProviderDesc: "작업 계획에 사용할 로컬 CLI를 선택합니다.",
     settingClaudePathName: "Claude Code CLI 경로",
@@ -247,38 +247,65 @@ export default class RhwpPlugin extends Plugin {
       new Notice(t("assetsInstallFailed", { message: getErrorMessage(error) }));
     });
 
-    this.registerView(VIEW_TYPE_RHWP, (leaf) => new RhwpFileView(leaf, this));
-    this.registerExtensions(["hwp", "hwpx"], VIEW_TYPE_RHWP);
-    this.registerFileMenu();
-    this.addRibbonIcon("file-plus", t("ribbonCreateNewFile"), () => {
-      void this.createNewFile();
-    }).addClass("hwp-agent-ribbon-button");
-    this.addSettingTab(new RhwpSettingTab(this.app, this));
-
-    this.addCommand({
-      id: "reload-rhwp-view",
-      name: t("reloadCurrentView"),
-      checkCallback: (checking) => {
-        const view = this.app.workspace.getActiveViewOfType(RhwpFileView);
-        if (!view) {
-          return false;
-        }
-
-        if (!checking) {
-          void view.reload();
-        }
-
-        return true;
-      }
+    this.runStartupStep("settings tab", () => {
+      this.addSettingTab(new RhwpSettingTab(this.app, this));
     });
-
-    this.addCommand({
-      id: "create-new-rhwp-file",
-      name: t("createNewFile"),
-      callback: () => {
+    this.registerCommands();
+    this.runStartupStep("view registration", () => {
+      this.registerView(VIEW_TYPE_RHWP, (leaf) => new RhwpFileView(leaf, this));
+    });
+    this.runStartupStep("HWP/HWPX extension registration", () => {
+      this.registerExtensions(["hwp", "hwpx"], VIEW_TYPE_RHWP);
+    });
+    this.runStartupStep("file menu", () => {
+      this.registerFileMenu();
+    });
+    this.runStartupStep("ribbon button", () => {
+      this.addRibbonIcon("file-text", t("ribbonCreateNewFile"), () => {
         void this.createNewFile();
-      }
+      }).addClass("hwp-agent-ribbon-button");
     });
+  }
+
+  private registerCommands(): void {
+    this.runStartupStep("reload command", () => {
+      this.addCommand({
+        id: "reload-rhwp-view",
+        name: t("reloadCurrentView"),
+        checkCallback: (checking) => {
+          const view = this.app.workspace.getActiveViewOfType(RhwpFileView);
+          if (!view) {
+            return false;
+          }
+
+          if (!checking) {
+            void view.reload();
+          }
+
+          return true;
+        }
+      });
+    });
+
+    this.runStartupStep("create file command", () => {
+      this.addCommand({
+        id: "create-new-rhwp-file",
+        name: t("createNewFile"),
+        callback: () => {
+          void this.createNewFile();
+        }
+      });
+    });
+  }
+
+  private runStartupStep(label: string, action: () => void): void {
+    try {
+      action();
+    } catch (error) {
+      const message = getErrorMessage(error);
+      console.error(`[HWP Agent] Failed to register ${label}`, error);
+      new Notice(`HWP Agent startup warning: ${label}: ${message}`);
+    }
   }
 
   async loadSettings(): Promise<void> {
