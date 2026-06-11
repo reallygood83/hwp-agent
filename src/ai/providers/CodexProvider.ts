@@ -20,6 +20,10 @@ export class CodexProvider extends BaseCliProvider {
     const prompt = this.buildOperationPrompt(input);
     const resolution = this.resolve();
     const args = [
+      "--sandbox",
+      "workspace-write",
+      "--ask-for-approval",
+      "never",
       "exec",
       "--color",
       "never",
@@ -28,10 +32,6 @@ export class CodexProvider extends BaseCliProvider {
       "--skip-git-repo-check",
       "--cd",
       input.cwd,
-      "--sandbox",
-      "workspace-write",
-      "--ask-for-approval",
-      "never",
       "--model",
       this.settings().codexModel,
       "--config",

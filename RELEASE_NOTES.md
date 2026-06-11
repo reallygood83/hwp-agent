@@ -1,5 +1,17 @@
 # Release Notes
 
+## 0.2.5
+
+### Fixed
+
+- Fixed Codex CLI execution failing with `unexpected argument '--ask-for-approval' found` by passing sandbox and approval options before the `exec` subcommand, matching the installed Codex CLI parser.
+- Renamed the visible AI action button from `계획` to `AI 생성` because the button creates the AI operation JSON that can later be applied.
+
+### Verified
+
+- Reproduced the Codex CLI invocation locally with `approval: never` and `sandbox: workspace-write`.
+- `npm run package:release`
+
 ## 0.2.4
 
 ### Added
