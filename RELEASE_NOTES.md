@@ -1,5 +1,17 @@
 # Release Notes
 
+## 0.1.1
+
+### Added
+
+- Added an Apply action for valid AI operation envelopes.
+- Added direct rHWP core application for text insertion, text replacement, table creation/cell edits, image insertion from vault files, and document save/export.
+- Added structured application results in the AI output panel after operations are written back to the HWP/HWPX file.
+
+### Verified
+
+- `npm run package:release`
+
 ## 0.1.0
 
 ### Added

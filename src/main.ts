@@ -30,7 +30,8 @@ import {
   type RhwpAiProviderSettings
 } from "./ai/types";
 import { extractRhwpDocumentContext, type RhwpDocumentContext } from "./rhwp/documentContext";
-import { validateOperationEnvelope } from "./rhwp/operations";
+import { applyRhwpOperationEnvelope } from "./rhwp/applyOperations";
+import { validateOperationEnvelope, type RhwpOperationEnvelope } from "./rhwp/operations";
 
 const VIEW_TYPE_RHWP = "ai-rhwp-view";
 const RHWP_CORE_VERSION = "0.7.13";
@@ -123,11 +124,16 @@ const I18N = {
     aiReadContext: "Read context",
     aiDiagnose: "Diagnose",
     aiPlan: "Plan",
+    aiApply: "Apply",
     aiNoContext: "No document context yet. Open a document or click Read context.",
     aiContextReady: "{{paragraphs}} paragraphs · {{tables}} tables · {{images}} images",
     aiRunning: "AI is planning operations...",
+    aiOperationReady: "Valid operation plan ready. Review it, then apply when ready.",
     aiOperationValid: "Operation JSON is valid.",
     aiOperationInvalid: "Operation JSON is invalid: {{message}}",
+    aiNoOperations: "No valid AI operation plan is ready.",
+    aiApplied: "Applied {{count}} AI operations to {{name}}.",
+    aiApplyFailed: "Failed to apply AI operations: {{message}}",
     settingFormatDesc: "HWP is the default because HWPX export/rendering is still less consistent in rhwp.",
     settingFormatName: "New file format",
     settingLargeFileBehaviorDesc: "Ask before opening files over the configured size, or always open them.",
@@ -193,11 +199,16 @@ const I18N = {
     aiReadContext: "문서 읽기",
     aiDiagnose: "진단",
     aiPlan: "계획",
+    aiApply: "적용",
     aiNoContext: "아직 문서 컨텍스트가 없습니다. 문서를 열거나 문서 읽기를 누르세요.",
     aiContextReady: "문단 {{paragraphs}}개 · 표 {{tables}}개 · 이미지 {{images}}개",
     aiRunning: "AI가 작업을 계획하는 중...",
+    aiOperationReady: "유효한 작업 계획이 준비되었습니다. 내용을 확인한 뒤 적용하세요.",
     aiOperationValid: "작업 JSON이 유효합니다.",
     aiOperationInvalid: "작업 JSON이 유효하지 않습니다: {{message}}",
+    aiNoOperations: "적용할 유효한 AI 작업 계획이 없습니다.",
+    aiApplied: "{{name}}에 AI 작업 {{count}}개를 적용했습니다.",
+    aiApplyFailed: "AI 작업 적용 실패: {{message}}",
     settingFormatDesc: "rhwp의 HWPX 내보내기/렌더링 일관성이 아직 낮아서 HWP를 기본값으로 둡니다.",
     settingFormatName: "새 파일 형식",
     settingLargeFileBehaviorDesc: "설정한 용량보다 큰 파일을 열기 전에 물어볼지 정합니다.",
@@ -754,6 +765,7 @@ class RhwpFileView extends FileView {
   private aiPromptEl: HTMLTextAreaElement | null = null;
   private aiOutputEl: HTMLElement | null = null;
   private lastDocumentContext: RhwpDocumentContext | null = null;
+  private lastOperationEnvelope: RhwpOperationEnvelope | null = null;
   private metaEl: HTMLElement | null = null;
   private currentFile: TFile | null = null;
   private mode: RhwpMode = "read";
@@ -1004,6 +1016,7 @@ class RhwpFileView extends FileView {
     this.createAiActionButton(actionsEl, "file-search", t("aiReadContext"), () => this.refreshDocumentContext());
     this.createAiActionButton(actionsEl, "activity", t("aiDiagnose"), () => this.diagnoseSelectedProvider());
     this.createAiActionButton(actionsEl, "send", t("aiPlan"), () => this.planWithSelectedProvider());
+    this.createAiActionButton(actionsEl, "wand-sparkles", t("aiApply"), () => this.applyLastOperationEnvelope());
 
     this.updateAiPanelStatus(statusEl);
   }
@@ -1090,10 +1103,38 @@ class RhwpFileView extends FileView {
     this.writeAiOutput(response.trim());
     try {
       const parsed = JSON.parse(response.trim());
-      validateOperationEnvelope(parsed);
+      this.lastOperationEnvelope = validateOperationEnvelope(parsed);
       new Notice(t("aiOperationValid"));
+      this.writeAiOutput(`${t("aiOperationReady")}\n\n${JSON.stringify(this.lastOperationEnvelope, null, 2)}`);
     } catch (error) {
+      this.lastOperationEnvelope = null;
       new Notice(t("aiOperationInvalid", { message: getErrorMessage(error) }));
+    }
+  }
+
+  private async applyLastOperationEnvelope(): Promise<void> {
+    if (!this.currentFile || !this.lastOperationEnvelope) {
+      new Notice(t("aiNoOperations"));
+      return;
+    }
+
+    try {
+      await this.plugin.ensureRhwpReady();
+      const applied = await applyRhwpOperationEnvelope({
+        app: this.app,
+        file: this.currentFile,
+        envelope: this.lastOperationEnvelope
+      });
+      new Notice(t("aiApplied", { count: applied.length, name: this.currentFile.name }));
+      this.writeAiOutput(JSON.stringify({ applied }, null, 2));
+      this.lastOperationEnvelope = null;
+      this.mode = "read";
+      this.destroyEditor();
+      await this.render();
+    } catch (error) {
+      const message = getErrorMessage(error);
+      new Notice(t("aiApplyFailed", { message }));
+      this.writeAiOutput(message, true);
     }
   }
 

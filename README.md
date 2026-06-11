@@ -10,7 +10,7 @@ The OOO QA plan lives in [`prj/OOO_QA.md`](prj/OOO_QA.md).
 
 ---
 
-[![Version](https://img.shields.io/badge/version-0.1.0-blue?style=flat-square)](https://github.com/reallygood83/hwp-agent)
+[![Version](https://img.shields.io/badge/version-0.1.1-blue?style=flat-square)](https://github.com/reallygood83/hwp-agent)
 [![License](https://img.shields.io/github/license/reallygood83/hwp-agent?style=flat-square)](LICENSE)
 [![Obsidian](https://img.shields.io/badge/Obsidian-desktop%20plugin-7C3AED?style=flat-square)](https://obsidian.md)
 [![HWP/HWPX](https://img.shields.io/badge/HWP%2FHWPX-rhwp-2F855A?style=flat-square)](https://github.com/edwardkim/rhwp)

@@ -56,6 +56,7 @@ V1 outcome gates:
 - Document context extraction can return paragraph previews from an opened document.
 - Provider diagnostics can report whether Claude, Codex, and Antigravity are available.
 - Operation validation rejects malformed edits before rHWP execution.
+- Valid operation envelopes can be applied through rHWP core APIs for the initial supported operation set.
 - Windows-specific CLI lookup paths are tested or documented.
 
 ## Current QA Status
@@ -68,5 +69,9 @@ V1 outcome gates:
 - [x] Initial document context extractor added.
 - [x] Initial operation schema validator added.
 - [x] `npm run build` passes in the new folder.
-- [ ] First UI entry point for AI panel exists.
-- [ ] First live document context extraction is wired into `RhwpFileView`.
+- [x] First UI entry point for AI panel exists.
+- [x] First live document context extraction is wired into `RhwpFileView`.
+- [x] Valid AI operation envelopes can be applied and saved back to HWP/HWPX through rHWP core.
+- [x] `npm run package:release` passes and writes BRAT release assets.
+- [ ] Live Obsidian runtime QA on macOS test vault.
+- [ ] Live Windows native/WSL CLI QA.
