@@ -91,6 +91,7 @@ export abstract class BaseCliProvider implements RhwpAiProvider {
     child.stdin?.end(stdin || "");
 
     const queue: RhwpAiEvent[] = [];
+    let stdoutText = "";
     let stdoutBuffer = "";
     let stderrBuffer = "";
     let done = false;
@@ -99,7 +100,9 @@ export abstract class BaseCliProvider implements RhwpAiProvider {
     let lastHeartbeatAt = startedAt;
 
     child.stdout.on("data", (chunk: Buffer) => {
-      stdoutBuffer += chunk.toString();
+      const text = chunk.toString();
+      stdoutText += text;
+      stdoutBuffer += text;
       const lines = stdoutBuffer.split(/\r?\n/);
       stdoutBuffer = lines.pop() || "";
       for (const line of lines) {
@@ -139,7 +142,7 @@ export abstract class BaseCliProvider implements RhwpAiProvider {
     }
 
     if (exitCode === 0) {
-      const finalText = finalOutputFile ? this.readTextFile(finalOutputFile) : stdoutBuffer.trim();
+      const finalText = finalOutputFile ? this.readTextFile(finalOutputFile) : stdoutText.trim();
       if (finalText) yield { type: "text", content: finalText };
       else if (stderrBuffer.trim()) yield { type: "progress", content: stderrBuffer.trim().slice(0, 400) };
     }
