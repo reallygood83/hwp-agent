@@ -1,4 +1,4 @@
-import type { RhwpDocumentContext } from "../rhwp/documentContext";
+import type { RhwpDocumentContext, RhwpSelectionContext } from "../rhwp/documentContext";
 
 export type RhwpAiProviderId = "claude" | "codex" | "antigravity";
 export type RhwpAiPermissionMode = "preview" | "auto" | "manual-json";
@@ -18,6 +18,7 @@ export interface RhwpAiQuery {
   cwd: string;
   locale: "ko" | "en";
   documentContext: RhwpDocumentContext;
+  selectedContext?: RhwpSelectionContext | null;
 }
 
 export type RhwpAiEvent =
@@ -50,4 +51,3 @@ export const DEFAULT_AI_PROVIDER_SETTINGS: RhwpAiProviderSettings = {
   permissionMode: "preview",
   environmentVariables: ""
 };
-

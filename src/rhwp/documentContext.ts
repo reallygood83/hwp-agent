@@ -23,6 +23,12 @@ export interface RhwpImageContext {
   description: string;
 }
 
+export interface RhwpSelectionContext {
+  text: string;
+  source: "editor_selection" | "obsidian_selection";
+  capturedAt: string;
+}
+
 export interface RhwpDocumentContext {
   fileName: string;
   extension: string;
@@ -30,6 +36,7 @@ export interface RhwpDocumentContext {
   paragraphs: RhwpParagraphContext[];
   tables: RhwpTableContext[];
   images: RhwpImageContext[];
+  selectedText?: RhwpSelectionContext | null;
   truncated: boolean;
 }
 
@@ -127,4 +134,3 @@ function safeString(read: () => string): string {
     return "";
   }
 }
-

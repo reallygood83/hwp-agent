@@ -62,6 +62,11 @@ export abstract class BaseCliProvider implements RhwpAiProvider {
       return;
     }
 
+    yield { type: "progress", content: `${this.label} CLI started. Waiting for operation JSON...` };
+    if (resolution.detail) {
+      yield { type: "progress", content: resolution.detail };
+    }
+
     const child = spawn(resolution.executablePath, [...resolution.argsPrefix, ...args], {
       cwd: input.cwd,
       env: this.environment(resolution),
@@ -77,6 +82,8 @@ export abstract class BaseCliProvider implements RhwpAiProvider {
     let stderrBuffer = "";
     let done = false;
     let exitCode: number | null = null;
+    const startedAt = Date.now();
+    let lastHeartbeatAt = startedAt;
 
     child.stdout.on("data", (chunk: Buffer) => {
       stdoutBuffer += chunk.toString();
@@ -108,6 +115,12 @@ export abstract class BaseCliProvider implements RhwpAiProvider {
       if (event) {
         yield event;
       } else {
+        const now = Date.now();
+        if (!done && now - lastHeartbeatAt >= 5000) {
+          lastHeartbeatAt = now;
+          const seconds = Math.round((now - startedAt) / 1000);
+          yield { type: "progress", content: `${this.label} is still running (${seconds}s elapsed).` };
+        }
         await new Promise((resolve) => setTimeout(resolve, 40));
       }
     }
@@ -126,11 +139,26 @@ export abstract class BaseCliProvider implements RhwpAiProvider {
     return [
       "You are an AI operation planner for an Obsidian plugin named AI rHWP Editor.",
       "You can read the current HWP/HWPX document context, but you must not edit files directly.",
+      "Exception: for image-generation requests, a CLI provider may create image assets only under .rhwp-agent/images in the current vault, then return an insert_image operation that points to that generated file.",
       "Return only JSON matching the RhwpOperationEnvelope schema. Do not wrap it in Markdown.",
+      "Supported operation types:",
+      "- insert_text: { type, target: { sectionIndex, paragraphIndex, charOffset }, text }",
+      "- replace_text: { type, target: { sectionIndex, paragraphIndex, charOffset, length }, text }",
+      "- replace_selection: { type, selectedText, replacement, occurrence? }. Use this when selected_context is present and the user asks to revise only the selected text.",
+      "- create_table: { type, target, rows, cols, cells? }",
+      "- edit_table_cell: { type, target, text }",
+      "- insert_image: { type, target, source: { kind, path }, layout: { width, height, description } }",
+      "- save_document: { type }",
+      "For Codex image generation, prefer gpt-image-2 when the CLI exposes an image-generation tool/model. Save a PNG/JPEG asset under .rhwp-agent/images and use source.kind = generated_file.",
+      "When locale is ko, write summaries and generated text in Korean unless the user asks otherwise.",
       "",
       "<document_context>",
       JSON.stringify(input.documentContext, null, 2),
       "</document_context>",
+      "",
+      "<selected_context>",
+      JSON.stringify(input.selectedContext ?? input.documentContext.selectedText ?? null, null, 2),
+      "</selected_context>",
       "",
       "<user_request>",
       input.userRequest,

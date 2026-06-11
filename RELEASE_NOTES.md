@@ -1,5 +1,23 @@
 # Release Notes
 
+## 0.2.4
+
+### Added
+
+- Added an AI undo checkpoint before applying generated operations, so users can restore the HWP/HWPX file after an unwanted AI-created table, image, or text change.
+- Added selection-aware AI editing. The HWP editor can capture dragged text as selected context and AI can return a `replace_selection` operation to replace that exact selected text.
+- Added `replace_selection` operation support with occurrence-based matching for safer selected-text replacement.
+
+### Changed
+
+- Codex image insertion prompts now ask Codex CLI to generate a context-aware image with `gpt-image-2`, save it under `.rhwp-agent/images`, and return an `insert_image` operation for rHWP insertion.
+- Codex CLI now runs with `workspace-write` and `approval never` in plugin planning mode so generated image assets can be written inside the vault without hidden approval stalls.
+- AI planning progress now logs CLI startup, resolved CLI path details, and heartbeat messages so users can tell whether Codex/Claude is still running.
+
+### Verified
+
+- `npm run build`
+
 ## 0.2.3
 
 ### Fixed
@@ -109,7 +127,7 @@
 - `npm run build`
 - `npm run package:release`
 
-## 0.2.4
+## Upstream 0.2.4
 
 ### Fixed
 

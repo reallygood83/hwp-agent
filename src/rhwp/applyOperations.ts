@@ -75,6 +75,8 @@ async function applyOperation(
       );
       return { deleted, inserted };
     }
+    case "replace_selection":
+      return replaceSelectedText(doc, operation.selectedText, operation.replacement, operation.occurrence ?? 1);
     case "create_table": {
       const created = tryJson(
         doc.createTable(
@@ -133,6 +135,54 @@ async function applyOperation(
   }
 }
 
+function replaceSelectedText(
+  doc: HwpDocument,
+  selectedText: string,
+  replacement: string,
+  occurrence: number
+): unknown {
+  const target = findTextOccurrence(doc, selectedText, occurrence);
+  if (!target) {
+    throw new Error("Selected text was not found in this HWP/HWPX document.");
+  }
+
+  const deleted = tryJson(doc.deleteText(target.sectionIndex, target.paragraphIndex, target.charOffset, selectedText.length));
+  const inserted = replacement
+    ? tryJson(doc.insertText(target.sectionIndex, target.paragraphIndex, target.charOffset, replacement))
+    : { ok: true, skipped: true };
+
+  return { ...target, deleted, inserted };
+}
+
+function findTextOccurrence(
+  doc: HwpDocument,
+  needle: string,
+  occurrence: number
+): { sectionIndex: number; paragraphIndex: number; charOffset: number; occurrence: number } | null {
+  let seen = 0;
+  const sectionCount = getSectionCount(doc);
+  for (let sectionIndex = 0; sectionIndex < sectionCount; sectionIndex += 1) {
+    const paragraphCount = safeNumber(() => doc.getParagraphCount(sectionIndex), 0);
+    for (let paragraphIndex = 0; paragraphIndex < paragraphCount; paragraphIndex += 1) {
+      const length = safeNumber(() => doc.getParagraphLength(sectionIndex, paragraphIndex), 0);
+      if (length <= 0) continue;
+
+      const text = safeString(() => doc.getTextRange(sectionIndex, paragraphIndex, 0, length));
+      let start = 0;
+      while (start <= text.length) {
+        const charOffset = text.indexOf(needle, start);
+        if (charOffset < 0) break;
+        seen += 1;
+        if (seen === occurrence) {
+          return { sectionIndex, paragraphIndex, charOffset, occurrence: seen };
+        }
+        start = charOffset + Math.max(needle.length, 1);
+      }
+    }
+  }
+  return null;
+}
+
 async function readImageBytes(app: App, currentFile: TFile, sourcePath: string): Promise<ArrayBuffer> {
   const candidates = buildImagePathCandidates(currentFile, sourcePath);
 
@@ -176,6 +226,37 @@ function tryJson(value: string): unknown {
     return JSON.parse(value);
   } catch {
     return value;
+  }
+}
+
+function getSectionCount(doc: HwpDocument): number {
+  const candidate = doc as HwpDocument & {
+    getSectionCount?: () => number;
+    sectionCount?: () => number;
+  };
+  if (typeof candidate.getSectionCount === "function") {
+    return safeNumber(() => candidate.getSectionCount?.() ?? 1, 1);
+  }
+  if (typeof candidate.sectionCount === "function") {
+    return safeNumber(() => candidate.sectionCount?.() ?? 1, 1);
+  }
+  return 1;
+}
+
+function safeNumber(read: () => number, fallback: number): number {
+  try {
+    const value = read();
+    return Number.isFinite(value) ? value : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function safeString(read: () => string): string {
+  try {
+    return read();
+  } catch {
+    return "";
   }
 }
 

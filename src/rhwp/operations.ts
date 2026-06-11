@@ -1,6 +1,7 @@
 export type RhwpOperation =
   | InsertTextOperation
   | ReplaceTextOperation
+  | ReplaceSelectionOperation
   | CreateTableOperation
   | EditTableCellOperation
   | InsertImageOperation
@@ -31,6 +32,13 @@ export interface ReplaceTextOperation {
     length: number;
   };
   text: string;
+}
+
+export interface ReplaceSelectionOperation {
+  type: "replace_selection";
+  selectedText: string;
+  replacement: string;
+  occurrence?: number;
 }
 
 export interface CreateTableOperation {
@@ -101,6 +109,13 @@ function validateOperation(value: unknown): RhwpOperation {
         target: { ...readPosition(value.target), length: readNonNegativeInt(readRecord(value.target).length, "length") },
         text: readText(value.text)
       };
+    case "replace_selection":
+      return {
+        type: "replace_selection",
+        selectedText: readText(value.selectedText),
+        replacement: readString(value.replacement, "replacement"),
+        occurrence: value.occurrence === undefined ? undefined : readPositiveInt(value.occurrence, "occurrence")
+      };
     case "create_table":
       return {
         type: "create_table",
@@ -162,6 +177,11 @@ function readRecord(value: unknown): Record<string, unknown> {
 
 function readText(value: unknown): string {
   if (typeof value !== "string" || value.trim() === "") throw new Error("Expected non-empty text.");
+  return value;
+}
+
+function readString(value: unknown, label: string): string {
+  if (typeof value !== "string") throw new Error(`${label} must be a string.`);
   return value;
 }
 

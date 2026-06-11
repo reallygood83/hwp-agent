@@ -30,7 +30,11 @@ import {
   type RhwpAiProviderId,
   type RhwpAiProviderSettings
 } from "./ai/types";
-import { extractRhwpDocumentContext, type RhwpDocumentContext } from "./rhwp/documentContext";
+import {
+  extractRhwpDocumentContext,
+  type RhwpDocumentContext,
+  type RhwpSelectionContext
+} from "./rhwp/documentContext";
 import { applyRhwpOperationEnvelope } from "./rhwp/applyOperations";
 import { validateOperationEnvelope, type RhwpOperationEnvelope } from "./rhwp/operations";
 
@@ -127,10 +131,13 @@ const I18N = {
     aiDefaultPrompt: "이 HWP/HWPX 문서를 읽고 문서 구조와 내용을 분석한 뒤, 사용자가 바로 적용할 수 있는 안전한 편집 작업을 한국어로 제안해줘. 가능한 경우 유효한 operation JSON만 반환해줘.",
     aiTablePrompt: "이 HWP/HWPX 문서를 읽고 현재 문맥에 맞는 편집 가능한 표를 삽입해줘. 표의 제목, 열 이름, 행 예시를 문서 내용에 맞게 구성하고, 유효한 operation JSON만 반환해줘.",
     aiImagePrompt: "이 HWP/HWPX 문서를 읽고 볼트에 있는 이미지를 현재 문맥에 맞는 위치에 삽입해줘. 이미지 경로가 필요하면 어떤 이미지를 넣어야 하는지 한국어로 명확히 요청하고, 적용 가능하면 유효한 operation JSON만 반환해줘.",
+    aiCodexImagePrompt: "이 HWP/HWPX 문서를 읽고 현재 문맥에 가장 잘 맞는 이미지를 Codex CLI에서 gpt-image-2 이미지 모델로 생성해줘. HWP 파일은 직접 수정하지 말고, 생성 이미지만 볼트의 .rhwp-agent/images 폴더 아래 PNG 파일로 저장한 뒤, 그 이미지 경로를 source.kind가 generated_file인 insert_image operation JSON으로 반환해줘. 이미지 내용은 한국어 문서 맥락에 맞게 만들고, 반환은 유효한 operation JSON만 해줘.",
     aiReadContext: "문서 읽기",
     aiDiagnose: "진단",
     aiPlan: "계획",
     aiApply: "적용",
+    aiUndo: "되돌리기",
+    aiSelectContext: "선택 영역",
     hwpTools: "한글 편집",
     hwpNew: "새 문서",
     hwpStartEdit: "편집 시작",
@@ -140,7 +147,7 @@ const I18N = {
     hwpImage: "이미지 삽입",
     aiNoContext: "No document context yet. Open a document or click Read context.",
     aiContextReady: "{{paragraphs}} paragraphs · {{tables}} tables · {{images}} images",
-    aiRunning: "AI is planning operations...",
+    aiRunning: "AI가 작업을 계획하는 중입니다. Codex/Claude CLI 응답을 기다리고 있어요...",
     aiOperationReady: "Valid operation plan ready. Review it, then apply when ready.",
     aiOperationValid: "Operation JSON is valid.",
     aiOperationInvalid: "Operation JSON is invalid: {{message}}",
@@ -148,6 +155,12 @@ const I18N = {
     aiPlanningBeforeApply: "적용할 작업 계획이 없어 AI가 먼저 계획을 생성합니다...",
     aiApplied: "Applied {{count}} AI operations to {{name}}.",
     aiApplyFailed: "Failed to apply AI operations: {{message}}",
+    aiUndoReady: "복원 지점이 준비되었습니다. 마음에 들지 않으면 되돌리기를 누르세요.",
+    aiUndoUnavailable: "되돌릴 AI 적용 기록이 없습니다.",
+    aiUndoRestored: "{{name}} 문서를 AI 적용 전 상태로 되돌렸습니다.",
+    aiSelectionEmpty: "드래그로 선택된 텍스트를 찾지 못했습니다. 편집 영역에서 텍스트를 선택한 뒤 다시 눌러 주세요.",
+    aiSelectionCaptured: "선택 영역 {{count}}자를 AI 컨텍스트로 사용합니다.",
+    aiSelectionPrompt: "아래 선택 영역만 문맥으로 보고, 내 요청에 맞게 한국어로 자연스럽게 수정한 뒤 선택 영역을 대치하는 replace_selection 작업 JSON만 만들어줘.",
     settingFormatDesc: "HWP is the default because HWPX export/rendering is still less consistent in rhwp.",
     settingFormatName: "New file format",
     settingLargeFileBehaviorDesc: "Ask before opening files over the configured size, or always open them.",
@@ -220,10 +233,13 @@ const I18N = {
     aiDefaultPrompt: "이 HWP/HWPX 문서를 읽고 문서 구조와 내용을 분석한 뒤, 사용자가 바로 적용할 수 있는 안전한 편집 작업을 한국어로 제안해줘. 가능한 경우 유효한 operation JSON만 반환해줘.",
     aiTablePrompt: "이 HWP/HWPX 문서를 읽고 현재 문맥에 맞는 편집 가능한 표를 삽입해줘. 표의 제목, 열 이름, 행 예시를 문서 내용에 맞게 구성하고, 유효한 operation JSON만 반환해줘.",
     aiImagePrompt: "이 HWP/HWPX 문서를 읽고 볼트에 있는 이미지를 현재 문맥에 맞는 위치에 삽입해줘. 이미지 경로가 필요하면 어떤 이미지를 넣어야 하는지 한국어로 명확히 요청하고, 적용 가능하면 유효한 operation JSON만 반환해줘.",
+    aiCodexImagePrompt: "이 HWP/HWPX 문서를 읽고 현재 문맥에 가장 잘 맞는 이미지를 Codex CLI에서 gpt-image-2 이미지 모델로 생성해줘. HWP 파일은 직접 수정하지 말고, 생성 이미지만 볼트의 .rhwp-agent/images 폴더 아래 PNG 파일로 저장한 뒤, 그 이미지 경로를 source.kind가 generated_file인 insert_image operation JSON으로 반환해줘. 이미지 내용은 한국어 문서 맥락에 맞게 만들고, 반환은 유효한 operation JSON만 해줘.",
     aiReadContext: "문서 읽기",
     aiDiagnose: "진단",
     aiPlan: "계획",
     aiApply: "적용",
+    aiUndo: "되돌리기",
+    aiSelectContext: "선택 영역",
     hwpTools: "한글 편집",
     hwpNew: "새 문서",
     hwpStartEdit: "편집 시작",
@@ -233,7 +249,7 @@ const I18N = {
     hwpImage: "이미지 삽입",
     aiNoContext: "아직 문서 컨텍스트가 없습니다. 문서를 열거나 문서 읽기를 누르세요.",
     aiContextReady: "문단 {{paragraphs}}개 · 표 {{tables}}개 · 이미지 {{images}}개",
-    aiRunning: "AI가 작업을 계획하는 중...",
+    aiRunning: "AI가 작업을 계획하는 중입니다. Codex/Claude CLI 응답을 기다리고 있어요...",
     aiOperationReady: "유효한 작업 계획이 준비되었습니다. 내용을 확인한 뒤 적용하세요.",
     aiOperationValid: "작업 JSON이 유효합니다.",
     aiOperationInvalid: "작업 JSON이 유효하지 않습니다: {{message}}",
@@ -241,6 +257,12 @@ const I18N = {
     aiPlanningBeforeApply: "적용할 작업 계획이 없어 AI가 먼저 계획을 생성합니다...",
     aiApplied: "{{name}}에 AI 작업 {{count}}개를 적용했습니다.",
     aiApplyFailed: "AI 작업 적용 실패: {{message}}",
+    aiUndoReady: "복원 지점이 준비되었습니다. 마음에 들지 않으면 되돌리기를 누르세요.",
+    aiUndoUnavailable: "되돌릴 AI 적용 기록이 없습니다.",
+    aiUndoRestored: "{{name}} 문서를 AI 적용 전 상태로 되돌렸습니다.",
+    aiSelectionEmpty: "드래그로 선택된 텍스트를 찾지 못했습니다. 편집 영역에서 텍스트를 선택한 뒤 다시 눌러 주세요.",
+    aiSelectionCaptured: "선택 영역 {{count}}자를 AI 컨텍스트로 사용합니다.",
+    aiSelectionPrompt: "아래 선택 영역만 문맥으로 보고, 내 요청에 맞게 한국어로 자연스럽게 수정한 뒤 선택 영역을 대치하는 replace_selection 작업 JSON만 만들어줘.",
     settingFormatDesc: "rhwp의 HWPX 내보내기/렌더링 일관성이 아직 낮아서 HWP를 기본값으로 둡니다.",
     settingFormatName: "새 파일 형식",
     settingLargeFileBehaviorDesc: "설정한 용량보다 큰 파일을 열기 전에 물어볼지 정합니다.",
@@ -269,6 +291,14 @@ type I18nKey = keyof typeof I18N.en;
 
 interface RhwpViewState extends Record<string, unknown> {
   file?: string;
+}
+
+interface RhwpUndoSnapshot {
+  filePath: string;
+  fileName: string;
+  bytes: ArrayBuffer;
+  summary: string;
+  createdAt: number;
 }
 
 export default class RhwpPlugin extends Plugin {
@@ -924,7 +954,9 @@ class RhwpFileView extends FileView {
   private aiPromptEl: HTMLTextAreaElement | null = null;
   private aiOutputEl: HTMLElement | null = null;
   private lastDocumentContext: RhwpDocumentContext | null = null;
+  private lastSelectedContext: RhwpSelectionContext | null = null;
   private lastOperationEnvelope: RhwpOperationEnvelope | null = null;
+  private lastUndoSnapshot: RhwpUndoSnapshot | null = null;
   private metaEl: HTMLElement | null = null;
   private currentFile: TFile | null = null;
   private mode: RhwpMode = "read";
@@ -961,6 +993,9 @@ class RhwpFileView extends FileView {
         return;
       }
       this.mode = "read";
+      this.lastDocumentContext = null;
+      this.lastSelectedContext = null;
+      this.lastOperationEnvelope = null;
     }
 
     if (!(await this.confirmLargeFileOpen(file))) {
@@ -1116,6 +1151,7 @@ class RhwpFileView extends FileView {
       try {
         const pageCount = this.getPageCount(doc);
         this.lastDocumentContext = extractRhwpDocumentContext(doc, file.name);
+        this.lastDocumentContext.selectedText = this.lastSelectedContext;
         this.updateAiPanelStatus();
 
         if (this.metaEl) {
@@ -1163,12 +1199,14 @@ class RhwpFileView extends FileView {
 
     this.createCommandButton(barEl, "file-search", t("aiReadContext"), () => this.openAgentAndRun(() => this.refreshDocumentContext()), !file);
     this.createCommandButton(barEl, "bot", t("aiAgent"), () => this.openAgentPanel());
+    this.createCommandButton(barEl, "scan-text", t("aiSelectContext"), () => this.openAgentAndRun(() => this.captureSelectedContext()), !file);
     this.createCommandButton(barEl, "send", t("aiPlan"), () => this.openAgentAndRun(async () => {
       await this.planWithSelectedProvider();
     }), !file);
     this.createCommandButton(barEl, "wand-sparkles", t("aiApply"), () => this.openAgentAndRun(() => this.applyLastOperationEnvelope()), !file);
+    this.createCommandButton(barEl, "undo-2", t("aiUndo"), () => this.openAgentAndRun(() => this.undoLastAiApply()), !this.canUndoAiApply());
     this.createCommandButton(barEl, "table-2", t("hwpTable"), () => this.openAgentWithPrompt(t("aiTablePrompt")), !file);
-    this.createCommandButton(barEl, "image", t("hwpImage"), () => this.openAgentWithPrompt(t("aiImagePrompt")), !file);
+    this.createCommandButton(barEl, "image", t("hwpImage"), () => this.openAgentWithPrompt(this.getImagePrompt()), !file);
   }
 
   private createCommandButton(
@@ -1208,6 +1246,10 @@ class RhwpFileView extends FileView {
     }
   }
 
+  private getImagePrompt(): string {
+    return this.plugin.settings.aiProvider === "codex" ? t("aiCodexImagePrompt") : t("aiImagePrompt");
+  }
+
   private async openAgentAndRun(action: () => Promise<void>): Promise<void> {
     await this.openAgentPanel();
     await action();
@@ -1241,11 +1283,13 @@ class RhwpFileView extends FileView {
 
     const actionsEl = this.aiPanelEl.createDiv({ cls: "rhwp-ai-actions" });
     this.createAiActionButton(actionsEl, "file-search", t("aiReadContext"), () => this.refreshDocumentContext());
+    this.createAiActionButton(actionsEl, "scan-text", t("aiSelectContext"), () => this.captureSelectedContext());
     this.createAiActionButton(actionsEl, "activity", t("aiDiagnose"), () => this.diagnoseSelectedProvider());
     this.createAiActionButton(actionsEl, "send", t("aiPlan"), async () => {
       await this.planWithSelectedProvider();
     });
     this.createAiActionButton(actionsEl, "wand-sparkles", t("aiApply"), () => this.applyLastOperationEnvelope());
+    this.createAiActionButton(actionsEl, "undo-2", t("aiUndo"), () => this.undoLastAiApply());
 
     this.updateAiPanelStatus(statusEl);
   }
@@ -1271,13 +1315,13 @@ class RhwpFileView extends FileView {
       target.setText(t("aiNoContext"));
       return;
     }
-    target.setText(
-      t("aiContextReady", {
-        paragraphs: this.lastDocumentContext.paragraphs.length,
-        tables: this.lastDocumentContext.tables.length,
-        images: this.lastDocumentContext.images.length
-      })
-    );
+    const contextText = t("aiContextReady", {
+      paragraphs: this.lastDocumentContext.paragraphs.length,
+      tables: this.lastDocumentContext.tables.length,
+      images: this.lastDocumentContext.images.length
+    });
+    const selectionText = this.lastSelectedContext ? ` · ${t("aiSelectionCaptured", { count: this.lastSelectedContext.text.length })}` : "";
+    target.setText(`${contextText}${selectionText}`);
   }
 
   private async refreshDocumentContext(): Promise<void> {
@@ -1288,6 +1332,7 @@ class RhwpFileView extends FileView {
       const doc = new HwpDocument(new Uint8Array(buffer));
       try {
         this.lastDocumentContext = extractRhwpDocumentContext(doc, this.currentFile.name);
+        this.lastDocumentContext.selectedText = this.lastSelectedContext;
         this.updateAiPanelStatus();
         this.writeAiOutput(JSON.stringify(this.lastDocumentContext, null, 2));
       } finally {
@@ -1296,6 +1341,69 @@ class RhwpFileView extends FileView {
     } catch (error) {
       this.writeAiOutput(getErrorMessage(error), true);
     }
+  }
+
+  private async captureSelectedContext(): Promise<void> {
+    const selected = this.readCurrentSelection();
+    if (!selected) {
+      this.lastSelectedContext = null;
+      this.updateAiPanelStatus();
+      new Notice(t("aiSelectionEmpty"));
+      return;
+    }
+
+    this.lastSelectedContext = {
+      text: selected.text,
+      source: selected.source,
+      capturedAt: new Date().toISOString()
+    };
+
+    if (this.lastDocumentContext) {
+      this.lastDocumentContext.selectedText = this.lastSelectedContext;
+    }
+
+    if (this.aiPromptEl && !this.aiPromptEl.value.trim()) {
+      this.aiPromptEl.value = `${t("aiSelectionPrompt")}\n\n선택 영역:\n${selected.text}`;
+    }
+
+    this.updateAiPanelStatus();
+    new Notice(t("aiSelectionCaptured", { count: selected.text.length }));
+    this.writeAiOutput(JSON.stringify({ selectedContext: this.lastSelectedContext }, null, 2));
+  }
+
+  private readCurrentSelection(): { text: string; source: RhwpSelectionContext["source"] } | null {
+    const editorSelection = this.readEditorSelectionText();
+    if (editorSelection) {
+      return { text: editorSelection, source: "editor_selection" };
+    }
+
+    const obsidianSelection = window.getSelection?.()?.toString().trim() ?? "";
+    if (obsidianSelection) {
+      return { text: obsidianSelection, source: "obsidian_selection" };
+    }
+
+    return null;
+  }
+
+  private readEditorSelectionText(): string {
+    const iframe = this.editor?.element;
+    if (!iframe) return "";
+
+    const readAttempts: Array<() => string | undefined> = [
+      () => iframe.contentWindow?.getSelection?.()?.toString(),
+      () => iframe.contentDocument?.getSelection?.()?.toString()
+    ];
+
+    for (const read of readAttempts) {
+      try {
+        const value = read()?.trim() ?? "";
+        if (value) return value;
+      } catch {
+        // Cross-origin editor builds can block iframe selection access.
+      }
+    }
+
+    return "";
   }
 
   private async diagnoseSelectedProvider(): Promise<void> {
@@ -1311,8 +1419,11 @@ class RhwpFileView extends FileView {
     }
     if (!this.lastDocumentContext) return false;
 
+    this.captureLiveSelectionIfPresent();
+    this.lastDocumentContext.selectedText = this.lastSelectedContext;
+
     if (this.aiPromptEl && !this.aiPromptEl.value.trim()) {
-      this.aiPromptEl.value = t("aiDefaultPrompt");
+      this.aiPromptEl.value = this.lastSelectedContext ? t("aiSelectionPrompt") : t("aiDefaultPrompt");
     }
 
     const request = this.aiPromptEl?.value.trim() || "";
@@ -1321,15 +1432,23 @@ class RhwpFileView extends FileView {
     const provider = this.createSelectedProvider();
     this.writeAiOutput(t("aiRunning"));
     let response = "";
+    const progressLog = [t("aiRunning")];
     for await (const event of provider.query({
       userRequest: request,
       cwd: this.getVaultPath(),
       locale: getLocale(),
-      documentContext: this.lastDocumentContext
+      documentContext: this.lastDocumentContext,
+      selectedContext: this.lastSelectedContext
     })) {
       if (event.type === "text") response += event.content;
-      if (event.type === "progress") this.writeAiOutput(event.content);
-      if (event.type === "error") this.writeAiOutput(event.content, true);
+      if (event.type === "progress") {
+        progressLog.push(event.content);
+        this.writeAiOutput(progressLog.join("\n"));
+      }
+      if (event.type === "error") {
+        progressLog.push(event.content);
+        this.writeAiOutput(progressLog.join("\n"), true);
+      }
     }
 
     if (!response.trim()) return false;
@@ -1345,6 +1464,17 @@ class RhwpFileView extends FileView {
       new Notice(t("aiOperationInvalid", { message: getErrorMessage(error) }));
       return false;
     }
+  }
+
+  private captureLiveSelectionIfPresent(): void {
+    const selected = this.readCurrentSelection();
+    if (!selected) return;
+
+    this.lastSelectedContext = {
+      text: selected.text,
+      source: selected.source,
+      capturedAt: new Date().toISOString()
+    };
   }
 
   private async applyLastOperationEnvelope(): Promise<void> {
@@ -1364,16 +1494,58 @@ class RhwpFileView extends FileView {
 
     try {
       await this.plugin.ensureRhwpReady();
+      await this.captureUndoSnapshot(this.lastOperationEnvelope.summary);
       const applied = await applyRhwpOperationEnvelope({
         app: this.app,
         file: this.currentFile,
         envelope: this.lastOperationEnvelope
       });
       new Notice(t("aiApplied", { count: applied.length, name: this.currentFile.name }));
-      this.writeAiOutput(JSON.stringify({ applied }, null, 2));
+      new Notice(t("aiUndoReady"));
+      this.writeAiOutput(JSON.stringify({ applied, undoReady: true }, null, 2));
       this.lastOperationEnvelope = null;
       this.mode = "read";
       this.destroyEditor();
+      await this.render();
+    } catch (error) {
+      const message = getErrorMessage(error);
+      new Notice(t("aiApplyFailed", { message }));
+      this.writeAiOutput(message, true);
+    }
+  }
+
+  private async captureUndoSnapshot(summary: string): Promise<void> {
+    if (!this.currentFile) return;
+    const bytes = await this.app.vault.readBinary(this.currentFile);
+    this.lastUndoSnapshot = {
+      filePath: this.currentFile.path,
+      fileName: this.currentFile.name,
+      bytes: copyArrayBuffer(bytes),
+      summary,
+      createdAt: Date.now()
+    };
+  }
+
+  private canUndoAiApply(): boolean {
+    return !!this.currentFile && this.lastUndoSnapshot?.filePath === this.currentFile.path;
+  }
+
+  private async undoLastAiApply(): Promise<void> {
+    if (!this.currentFile || !this.canUndoAiApply() || !this.lastUndoSnapshot) {
+      new Notice(t("aiUndoUnavailable"));
+      return;
+    }
+
+    try {
+      await this.app.vault.modifyBinary(this.currentFile, copyArrayBuffer(this.lastUndoSnapshot.bytes));
+      const restoredName = this.lastUndoSnapshot.fileName;
+      this.lastOperationEnvelope = null;
+      this.lastSelectedContext = null;
+      this.lastDocumentContext = null;
+      this.lastUndoSnapshot = null;
+      this.mode = "read";
+      this.destroyEditor();
+      new Notice(t("aiUndoRestored", { name: restoredName }));
       await this.render();
     } catch (error) {
       const message = getErrorMessage(error);
@@ -1974,6 +2146,12 @@ class RhwpSettingTab extends PluginSettingTab {
 
 function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
   const copy = new Uint8Array(bytes);
+  return copy.buffer;
+}
+
+function copyArrayBuffer(buffer: ArrayBuffer): ArrayBuffer {
+  const copy = new Uint8Array(buffer.byteLength);
+  copy.set(new Uint8Array(buffer));
   return copy.buffer;
 }
 
