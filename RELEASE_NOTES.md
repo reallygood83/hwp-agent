@@ -1,5 +1,19 @@
 # Release Notes
 
+## 0.1.3
+
+### Added
+
+- Added an Obsidian ribbon button that creates a new HWP/HWPX file through HWP Agent.
+
+### Changed
+
+- Clarified that BRAT-installed plugins appear under Installed plugins and do not appear in the official Obsidian Community plugins catalog until separately submitted.
+
+### Verified
+
+- `npm run package:release`
+
 ## 0.1.2
 
 ### Changed

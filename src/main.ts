@@ -111,6 +111,7 @@ const I18N = {
     reload: "Reload",
     reloadCurrentView: "Reload current HWP/HWPX view",
     rhwpInfo: "rhwp {{version}}",
+    ribbonCreateNewFile: "Create new HWP/HWPX file with HWP Agent",
     saveFailed: "Failed to save {{name}}: {{message}}",
     save: "Save",
     saved: "Saved {{name}}",
@@ -186,6 +187,7 @@ const I18N = {
     reload: "새로고침",
     reloadCurrentView: "현재 HWP/HWPX 뷰 새로고침",
     rhwpInfo: "rhwp {{version}}",
+    ribbonCreateNewFile: "HWP Agent로 새 HWP/HWPX 파일 만들기",
     saveFailed: "{{name}} 저장 실패: {{message}}",
     save: "저장",
     saved: "{{name}} 저장됨",
@@ -248,6 +250,9 @@ export default class RhwpPlugin extends Plugin {
     this.registerView(VIEW_TYPE_RHWP, (leaf) => new RhwpFileView(leaf, this));
     this.registerExtensions(["hwp", "hwpx"], VIEW_TYPE_RHWP);
     this.registerFileMenu();
+    this.addRibbonIcon("file-plus", t("ribbonCreateNewFile"), () => {
+      void this.createNewFile();
+    }).addClass("hwp-agent-ribbon-button");
     this.addSettingTab(new RhwpSettingTab(this.app, this));
 
     this.addCommand({

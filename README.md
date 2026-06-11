@@ -22,7 +22,7 @@ The OOO QA plan lives in [`prj/OOO_QA.md`](prj/OOO_QA.md).
 
 ---
 
-[![Version](https://img.shields.io/badge/version-0.1.2-blue?style=flat-square)](https://github.com/reallygood83/hwp-agent)
+[![Version](https://img.shields.io/badge/version-0.1.3-blue?style=flat-square)](https://github.com/reallygood83/hwp-agent)
 [![License](https://img.shields.io/github/license/reallygood83/hwp-agent?style=flat-square)](LICENSE)
 [![Obsidian](https://img.shields.io/badge/Obsidian-desktop%20plugin-7C3AED?style=flat-square)](https://obsidian.md)
 [![HWP/HWPX](https://img.shields.io/badge/HWP%2FHWPX-rhwp-2F855A?style=flat-square)](https://github.com/edwardkim/rhwp)
@@ -39,15 +39,25 @@ Open, create, and edit `.hwp` and `.hwpx` files in Obsidian Desktop with [rhwp](
 4. In `Settings > Community plugins > Installed plugins`, search for `HWP Agent` or `AI rHWP Editor`.
 5. Enable `HWP Agent - AI rHWP Editor`.
 
-Latest release: [`0.1.2`](https://github.com/reallygood83/hwp-agent/releases/tag/0.1.2)
+Latest release: [`0.1.3`](https://github.com/reallygood83/hwp-agent/releases/tag/0.1.3)
 
 BRAT installs the plugin files first, but Obsidian may still require manually
 enabling the installed plugin. The plugin folder/id is `ai-rhwp-editor`; the
 visible plugin name is `HWP Agent - AI rHWP Editor`.
 
+This plugin is not yet listed in Obsidian's official Community plugins catalog.
+When installed through BRAT, it appears under `Installed plugins`, not in the
+official browse/search catalog. After enabling it, a ribbon button with a
+file-plus icon appears for creating a new HWP/HWPX file.
+
 BRAT은 먼저 플러그인 파일을 설치하고, Obsidian에서는 설치된 플러그인을 사용자가
 직접 켜야 할 수 있습니다. 설치 폴더/id는 `ai-rhwp-editor`이고, 플러그인 목록에
 보이는 이름은 `HWP Agent - AI rHWP Editor`입니다.
+
+이 플러그인은 아직 Obsidian 공식 Community plugins 카탈로그에 등록된 플러그인이
+아닙니다. BRAT으로 설치하면 공식 검색 목록이 아니라 `Installed plugins` 영역에
+표시됩니다. 활성화 후에는 새 HWP/HWPX 파일을 만드는 file-plus 리본 버튼이
+생깁니다.
 
 ## AI features
 
