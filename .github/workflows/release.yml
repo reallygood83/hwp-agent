@@ -1,0 +1,80 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and upload release assets
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify tag matches manifest version
+        run: |
+          node -e "const fs = require('fs'); const tag = process.env.GITHUB_REF_NAME; const manifest = JSON.parse(fs.readFileSync('manifest.json', 'utf8')); const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8')); if (manifest.version !== tag || pkg.version !== tag) { console.error(`Tag ${tag} must match manifest.json (${manifest.version}) and package.json (${pkg.version}).`); process.exit(1); }"
+
+      - name: Build release assets
+        run: npm run package:release
+
+      - name: Verify release assets
+        run: |
+          test -f release/main.js
+          test -f release/manifest.json
+          test -f release/styles.css
+          test -f release/rhwp-editor.zip
+          unzip -l release/rhwp-editor.zip | grep -q "rhwp_bg.wasm"
+          unzip -l release/rhwp-editor.zip | grep -q "rhwp-studio/index.html"
+          unzip -l release/rhwp-editor.zip | grep -q "rhwp-assets.json"
+
+      - name: Create or update GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          notes_file="$(mktemp)"
+          awk -v tag="$GITHUB_REF_NAME" '
+            $0 == "## " tag { found = 1; next }
+            found && /^## / { exit }
+            found { print }
+          ' RELEASE_NOTES.md > "$notes_file"
+
+          if ! test -s "$notes_file"; then
+            echo "Release $GITHUB_REF_NAME" > "$notes_file"
+          fi
+
+          cat "$notes_file"
+
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" \
+              release/main.js \
+              release/manifest.json \
+              release/styles.css \
+              release/rhwp-editor.zip \
+              --clobber
+            gh release edit "$GITHUB_REF_NAME" \
+              --notes-file "$notes_file"
+          else
+            gh release create "$GITHUB_REF_NAME" \
+              release/main.js \
+              release/manifest.json \
+              release/styles.css \
+              release/rhwp-editor.zip \
+              --title "$GITHUB_REF_NAME" \
+              --notes-file "$notes_file"
+          fi

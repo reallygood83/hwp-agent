@@ -1,0 +1,53 @@
+import type { RhwpDocumentContext } from "../rhwp/documentContext";
+
+export type RhwpAiProviderId = "claude" | "codex" | "antigravity";
+export type RhwpAiPermissionMode = "preview" | "auto" | "manual-json";
+
+export interface RhwpAiProviderSettings {
+  claudeCliPath: string;
+  codexCliPath: string;
+  antigravityCliPath: string;
+  codexModel: string;
+  reasoningEffort: "low" | "medium" | "high" | "xhigh";
+  permissionMode: RhwpAiPermissionMode;
+  environmentVariables: string;
+}
+
+export interface RhwpAiQuery {
+  userRequest: string;
+  cwd: string;
+  locale: "ko" | "en";
+  documentContext: RhwpDocumentContext;
+}
+
+export type RhwpAiEvent =
+  | { type: "progress"; content: string }
+  | { type: "text"; content: string }
+  | { type: "error"; content: string }
+  | { type: "done" };
+
+export interface RhwpProviderDiagnostic {
+  id: RhwpAiProviderId;
+  ok: boolean;
+  executablePath: string | null;
+  detail: string;
+}
+
+export interface RhwpAiProvider {
+  id: RhwpAiProviderId;
+  label: string;
+  query(input: RhwpAiQuery): AsyncGenerator<RhwpAiEvent>;
+  cancel(): void;
+  diagnose(): Promise<RhwpProviderDiagnostic>;
+}
+
+export const DEFAULT_AI_PROVIDER_SETTINGS: RhwpAiProviderSettings = {
+  claudeCliPath: "",
+  codexCliPath: "",
+  antigravityCliPath: "",
+  codexModel: "gpt-5.4",
+  reasoningEffort: "high",
+  permissionMode: "preview",
+  environmentVariables: ""
+};
+

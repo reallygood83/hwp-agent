@@ -1,0 +1,44 @@
+{
+  "name": "obsidian-ai-rhwp-editor",
+  "version": "0.1.0",
+  "description": "AI-assisted HWP/HWPX editor for Obsidian, powered by rhwp and local AI CLIs.",
+  "main": "main.js",
+  "scripts": {
+    "dev": "node esbuild.config.mjs --watch",
+    "build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production && node scripts/copy-wasm.mjs",
+    "deploy:test-vault": "npm run build && node scripts/deploy-test-vault.mjs",
+    "package:release": "npm run build && node scripts/package-release.mjs"
+  },
+  "keywords": [
+    "hwp",
+    "hwpx",
+    "rhwp",
+    "obsidian",
+    "ai",
+    "claude",
+    "codex",
+    "antigravity"
+  ],
+  "author": "reallygood83",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/reallygood83/hwp-agent.git"
+  },
+  "bugs": {
+    "url": "https://github.com/reallygood83/hwp-agent/issues"
+  },
+  "homepage": "https://github.com/reallygood83/hwp-agent#readme",
+  "dependencies": {
+    "@rhwp/core": "^0.7.13",
+    "@rhwp/editor": "^0.7.13"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.24",
+    "builtin-modules": "^4.0.0",
+    "esbuild": "^0.25.5",
+    "jszip": "^3.10.1",
+    "obsidian": "^1.8.7",
+    "typescript": "^5.8.3"
+  }
+}
