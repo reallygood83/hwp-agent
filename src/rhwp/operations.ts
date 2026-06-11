@@ -2,6 +2,7 @@ export type RhwpOperation =
   | InsertTextOperation
   | ReplaceTextOperation
   | ReplaceSelectionOperation
+  | ReplaceDocumentOperation
   | CreateTableOperation
   | EditTableCellOperation
   | InsertImageOperation
@@ -39,6 +40,11 @@ export interface ReplaceSelectionOperation {
   selectedText: string;
   replacement: string;
   occurrence?: number;
+}
+
+export interface ReplaceDocumentOperation {
+  type: "replace_document";
+  text: string;
 }
 
 export interface CreateTableOperation {
@@ -100,7 +106,8 @@ function validateOperation(value: unknown): RhwpOperation {
   if (!isRecord(value) || typeof value.type !== "string") {
     throw new Error("Operation must include a type.");
   }
-  switch (value.type) {
+  const operationType = normalizeOperationType(value.type);
+  switch (operationType) {
     case "insert_text":
       return { type: "insert_text", target: readPosition(value.target), text: readText(value.text) };
     case "replace_text":
@@ -115,6 +122,11 @@ function validateOperation(value: unknown): RhwpOperation {
         selectedText: readText(value.selectedText),
         replacement: readString(value.replacement, "replacement"),
         occurrence: value.occurrence === undefined ? undefined : readPositiveInt(value.occurrence, "occurrence")
+      };
+    case "replace_document":
+      return {
+        type: "replace_document",
+        text: readFirstText(value, ["text", "content", "replacement", "markdown", "documentText"])
       };
     case "create_table":
       return {
@@ -161,6 +173,13 @@ function validateOperation(value: unknown): RhwpOperation {
   }
 }
 
+function normalizeOperationType(type: string): string {
+  if (["rewrite_document", "replace_all_text", "set_document_text", "update_document"].includes(type)) {
+    return "replace_document";
+  }
+  return type;
+}
+
 function readPosition(value: unknown): DocumentPosition {
   const target = readRecord(value);
   return {
@@ -178,6 +197,14 @@ function readRecord(value: unknown): Record<string, unknown> {
 function readText(value: unknown): string {
   if (typeof value !== "string" || value.trim() === "") throw new Error("Expected non-empty text.");
   return value;
+}
+
+function readFirstText(record: Record<string, unknown>, keys: string[]): string {
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === "string" && value.trim()) return value;
+  }
+  throw new Error(`Expected non-empty text in one of: ${keys.join(", ")}.`);
 }
 
 function readString(value: unknown, label: string): string {

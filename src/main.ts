@@ -162,6 +162,7 @@ const I18N = {
     aiOperationReady: "Valid operation plan ready. Review it, then apply when ready.",
     aiOperationValid: "Operation JSON is valid.",
     aiOperationInvalid: "Operation JSON is invalid: {{message}}",
+    aiInvalidLogSaved: "Invalid AI response was saved to {{path}}.",
     aiNoOperations: "적용할 유효한 AI 작업이 아직 없습니다. 먼저 AI 생성을 누르고 다시 적용해 주세요.",
     aiPlanningBeforeApply: "적용할 작업이 없어 AI가 먼저 작업 JSON을 생성합니다...",
     aiApplied: "Applied {{count}} AI operations to {{name}}.",
@@ -281,6 +282,7 @@ const I18N = {
     aiOperationReady: "유효한 AI 작업이 준비되었습니다. 내용을 확인한 뒤 적용하세요.",
     aiOperationValid: "작업 JSON이 유효합니다.",
     aiOperationInvalid: "작업 JSON이 유효하지 않습니다: {{message}}",
+    aiInvalidLogSaved: "유효하지 않은 AI 응답을 {{path}}에 저장했습니다.",
     aiNoOperations: "적용할 유효한 AI 작업이 아직 없습니다. 먼저 AI 생성을 누르고 다시 적용해 주세요.",
     aiPlanningBeforeApply: "적용할 작업이 없어 AI가 먼저 작업 JSON을 생성합니다...",
     aiApplied: "{{name}}에 AI 작업 {{count}}개를 적용했습니다.",
@@ -867,6 +869,75 @@ function parseAiOperationJson(response: string): unknown {
   }
 
   throw lastError instanceof Error ? lastError : new Error("No valid JSON object found in AI response.");
+}
+
+function normalizeAiOperationEnvelope(value: unknown): unknown {
+  if (!isPlainRecord(value)) return value;
+
+  if (typeof value.type === "string") {
+    return createNormalizedEnvelope([normalizeAiOperation(value)]);
+  }
+
+  const normalized: Record<string, unknown> = { ...value };
+  if (!("operations" in normalized) && "operation" in normalized) {
+    normalized.operations = normalized.operation;
+  }
+
+  if (isPlainRecord(normalized.operations)) {
+    normalized.operations = [normalized.operations];
+  }
+
+  if (Array.isArray(normalized.operations)) {
+    normalized.operations = normalized.operations.map(normalizeAiOperation);
+  }
+
+  if (normalized.version === undefined) {
+    normalized.version = 1;
+  }
+  if (typeof normalized.summary !== "string") {
+    normalized.summary = "AI 작업";
+  }
+  if (typeof normalized.requiresUserApproval !== "boolean") {
+    normalized.requiresUserApproval = true;
+  }
+
+  return normalized;
+}
+
+function createNormalizedEnvelope(operations: unknown[]): unknown {
+  return {
+    version: 1,
+    summary: "AI 작업",
+    requiresUserApproval: true,
+    operations
+  };
+}
+
+function normalizeAiOperation(value: unknown): unknown {
+  if (!isPlainRecord(value)) return value;
+
+  const normalized: Record<string, unknown> = { ...value };
+  if (typeof normalized.type === "string") {
+    normalized.type = normalizeAiOperationType(normalized.type);
+  }
+
+  if (normalized.type === "replace_document" && typeof normalized.text !== "string") {
+    for (const key of ["content", "replacement", "markdown", "documentText"]) {
+      if (typeof normalized[key] === "string") {
+        normalized.text = normalized[key];
+        break;
+      }
+    }
+  }
+
+  return normalized;
+}
+
+function normalizeAiOperationType(type: string): string {
+  if (["rewrite_document", "replace_all_text", "set_document_text", "update_document"].includes(type)) {
+    return "replace_document";
+  }
+  return type;
 }
 
 function extractBalancedJsonObject(text: string): string | null {
@@ -1679,9 +1750,12 @@ class RhwpFileView extends FileView {
     if (runId !== this.activeAiRunId) return false;
     if (!response.trim()) return false;
     this.writeAiOutput(response.trim());
+    let parsed: unknown = null;
+    let normalized: unknown = null;
     try {
-      const parsed = parseAiOperationJson(response);
-      this.lastOperationEnvelope = validateOperationEnvelope(parsed);
+      parsed = parseAiOperationJson(response);
+      normalized = normalizeAiOperationEnvelope(parsed);
+      this.lastOperationEnvelope = validateOperationEnvelope(normalized);
       new Notice(t("aiOperationValid"));
       this.writeAiOutput(`${t("aiOperationReady")}\n\n${JSON.stringify(this.lastOperationEnvelope, null, 2)}`);
       if (this.shouldAutoApplyImageOperation(this.lastOperationEnvelope)) {
@@ -1694,8 +1768,51 @@ class RhwpFileView extends FileView {
     } catch (error) {
       this.lastOperationEnvelope = null;
       this.autoApplyNextImageOperation = false;
-      new Notice(t("aiOperationInvalid", { message: getErrorMessage(error) }));
+      const message = getErrorMessage(error);
+      const logPath = await this.saveInvalidAiResponse({
+        error: message,
+        response,
+        parsed,
+        normalized
+      });
+      const logMessage = logPath ? `\n${t("aiInvalidLogSaved", { path: logPath })}` : "";
+      new Notice(t("aiOperationInvalid", { message }));
+      this.writeAiOutput(`${response.trim()}\n\n${t("aiOperationInvalid", { message })}${logMessage}`, true);
       return false;
+    }
+  }
+
+  private async saveInvalidAiResponse(details: {
+    error: string;
+    response: string;
+    parsed: unknown;
+    normalized: unknown;
+  }): Promise<string | null> {
+    if (!this.currentFile) return null;
+
+    const logDir = ".rhwp-agent/logs";
+    const logPath = `${logDir}/invalid-operation-${formatLogTimestamp(new Date())}.json`;
+    try {
+      await ensureAdapterFolder(this.app, logDir);
+      await this.app.vault.adapter.write(
+        logPath,
+        JSON.stringify(
+          {
+            createdAt: new Date().toISOString(),
+            provider: this.plugin.settings.aiProvider,
+            file: this.currentFile.path,
+            error: details.error,
+            parsed: details.parsed,
+            normalized: details.normalized,
+            response: details.response
+          },
+          null,
+          2
+        )
+      );
+      return logPath;
+    } catch {
+      return null;
     }
   }
 
@@ -2749,6 +2866,34 @@ function toJavaScriptStringContent(value: string, quote: string): string {
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+async function ensureAdapterFolder(app: App, folderPath: string): Promise<void> {
+  const parts = normalizePath(folderPath).split("/").filter(Boolean);
+  let current = "";
+  for (const part of parts) {
+    current = current ? `${current}/${part}` : part;
+    if (!(await app.vault.adapter.exists(current))) {
+      await app.vault.adapter.mkdir(current);
+    }
+  }
+}
+
+function formatLogTimestamp(date: Date): string {
+  const pad = (value: number): string => value.toString().padStart(2, "0");
+  return [
+    date.getFullYear(),
+    pad(date.getMonth() + 1),
+    pad(date.getDate()),
+    "-",
+    pad(date.getHours()),
+    pad(date.getMinutes()),
+    pad(date.getSeconds())
+  ].join("");
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function sleep(ms: number): Promise<void> {

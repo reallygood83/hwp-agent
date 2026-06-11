@@ -77,6 +77,8 @@ async function applyOperation(
     }
     case "replace_selection":
       return replaceSelectedText(doc, operation.selectedText, operation.replacement, operation.occurrence ?? 1);
+    case "replace_document":
+      return replaceDocumentText(doc, operation.text);
     case "create_table": {
       const created = tryJson(
         doc.createTable(
@@ -136,6 +138,35 @@ async function applyOperation(
     case "save_document":
       return { ok: true, skipped: true };
   }
+}
+
+function replaceDocumentText(doc: HwpDocument, text: string): unknown {
+  const cleared: unknown[] = [];
+  const sectionCount = getSectionCount(doc);
+
+  for (let sectionIndex = sectionCount - 1; sectionIndex >= 0; sectionIndex -= 1) {
+    const paragraphCount = safeNumber(() => doc.getParagraphCount(sectionIndex), 0);
+    for (let paragraphIndex = paragraphCount - 1; paragraphIndex >= 0; paragraphIndex -= 1) {
+      const length = safeNumber(() => doc.getParagraphLength(sectionIndex, paragraphIndex), 0);
+      if (paragraphIndex === 0) {
+        if (length > 0) {
+          cleared.push(tryJson(doc.deleteText(sectionIndex, paragraphIndex, 0, length)));
+        }
+        continue;
+      }
+
+      try {
+        cleared.push(tryJson(doc.deleteParagraph(sectionIndex, paragraphIndex)));
+      } catch {
+        if (length > 0) {
+          cleared.push(tryJson(doc.deleteText(sectionIndex, paragraphIndex, 0, length)));
+        }
+      }
+    }
+  }
+
+  const inserted = tryJson(doc.insertText(0, 0, 0, text));
+  return { cleared, inserted };
 }
 
 function replaceSelectedText(
