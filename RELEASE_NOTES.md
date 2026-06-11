@@ -1,5 +1,17 @@
 # Release Notes
 
+## 0.2.2
+
+### Fixed
+
+- Changed AI Agent prompt placeholders and generated table/image prompts to Korean even when Obsidian is running in English.
+- Made the Plan button generate a Korean default prompt when the prompt box is empty.
+- Kept the HWP command-bar save/read-mode labels in Korean for Korean HWP editing workflows.
+
+### Verified
+
+- `npm run package:release`
+
 ## 0.2.1
 
 ### Fixed

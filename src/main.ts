@@ -123,18 +123,21 @@ const I18N = {
     aiAgent: "AI Agent",
     aiPanelTitle: "AI Agent",
     aiProvider: "Provider",
-    aiPromptPlaceholder: "Ask AI to read this HWP/HWPX and propose safe operations...",
-    aiTablePrompt: "Read this HWP/HWPX document and insert an editable table that fits the current document context. Return only the valid operation JSON.",
-    aiImagePrompt: "Read this HWP/HWPX document and insert an image from the vault where it best fits the current document context. Return only the valid operation JSON.",
-    aiReadContext: "Read context",
-    aiDiagnose: "Diagnose",
-    aiPlan: "Plan",
-    aiApply: "Apply",
-    hwpTools: "HWP tools",
-    hwpNew: "New",
-    hwpStartEdit: "Start edit",
-    hwpTable: "Table",
-    hwpImage: "Image",
+    aiPromptPlaceholder: "AI에게 이 HWP/HWPX 문서를 읽고 안전한 편집 작업을 한국어로 계획하게 하세요...",
+    aiDefaultPrompt: "이 HWP/HWPX 문서를 읽고 문서 구조와 내용을 분석한 뒤, 사용자가 바로 적용할 수 있는 안전한 편집 작업을 한국어로 제안해줘. 가능한 경우 유효한 operation JSON만 반환해줘.",
+    aiTablePrompt: "이 HWP/HWPX 문서를 읽고 현재 문맥에 맞는 편집 가능한 표를 삽입해줘. 표의 제목, 열 이름, 행 예시를 문서 내용에 맞게 구성하고, 유효한 operation JSON만 반환해줘.",
+    aiImagePrompt: "이 HWP/HWPX 문서를 읽고 볼트에 있는 이미지를 현재 문맥에 맞는 위치에 삽입해줘. 이미지 경로가 필요하면 어떤 이미지를 넣어야 하는지 한국어로 명확히 요청하고, 적용 가능하면 유효한 operation JSON만 반환해줘.",
+    aiReadContext: "문서 읽기",
+    aiDiagnose: "진단",
+    aiPlan: "계획",
+    aiApply: "적용",
+    hwpTools: "한글 편집",
+    hwpNew: "새 문서",
+    hwpStartEdit: "편집 시작",
+    hwpSave: "저장",
+    hwpBackToReadOnly: "읽기 모드",
+    hwpTable: "표 삽입",
+    hwpImage: "이미지 삽입",
     aiNoContext: "No document context yet. Open a document or click Read context.",
     aiContextReady: "{{paragraphs}} paragraphs · {{tables}} tables · {{images}} images",
     aiRunning: "AI is planning operations...",
@@ -213,8 +216,9 @@ const I18N = {
     aiPanelTitle: "AI Agent",
     aiProvider: "제공자",
     aiPromptPlaceholder: "AI에게 이 HWP/HWPX 문서를 읽고 안전한 작업을 제안하게 하세요...",
-    aiTablePrompt: "이 HWP/HWPX 문서를 읽고 현재 문맥에 맞는 편집 가능한 표를 삽입해줘. 유효한 operation JSON만 반환해줘.",
-    aiImagePrompt: "이 HWP/HWPX 문서를 읽고 볼트에 있는 이미지를 현재 문맥에 맞는 위치에 삽입해줘. 유효한 operation JSON만 반환해줘.",
+    aiDefaultPrompt: "이 HWP/HWPX 문서를 읽고 문서 구조와 내용을 분석한 뒤, 사용자가 바로 적용할 수 있는 안전한 편집 작업을 한국어로 제안해줘. 가능한 경우 유효한 operation JSON만 반환해줘.",
+    aiTablePrompt: "이 HWP/HWPX 문서를 읽고 현재 문맥에 맞는 편집 가능한 표를 삽입해줘. 표의 제목, 열 이름, 행 예시를 문서 내용에 맞게 구성하고, 유효한 operation JSON만 반환해줘.",
+    aiImagePrompt: "이 HWP/HWPX 문서를 읽고 볼트에 있는 이미지를 현재 문맥에 맞는 위치에 삽입해줘. 이미지 경로가 필요하면 어떤 이미지를 넣어야 하는지 한국어로 명확히 요청하고, 적용 가능하면 유효한 operation JSON만 반환해줘.",
     aiReadContext: "문서 읽기",
     aiDiagnose: "진단",
     aiPlan: "계획",
@@ -222,6 +226,8 @@ const I18N = {
     hwpTools: "한글 편집",
     hwpNew: "새 문서",
     hwpStartEdit: "편집 시작",
+    hwpSave: "저장",
+    hwpBackToReadOnly: "읽기 모드",
     hwpTable: "표 삽입",
     hwpImage: "이미지 삽입",
     aiNoContext: "아직 문서 컨텍스트가 없습니다. 문서를 열거나 문서 읽기를 누르세요.",
@@ -1090,8 +1096,8 @@ class RhwpFileView extends FileView {
     if (this.mode === "read") {
       this.createCommandButton(barEl, "pencil", t("hwpStartEdit"), () => this.enableEditMode(), !file);
     } else {
-      this.createCommandButton(barEl, "save", t("save"), () => this.saveEdits(), !file);
-      this.createCommandButton(barEl, "book-open", t("backToReadOnly"), () => this.enableReadMode(), !file);
+      this.createCommandButton(barEl, "save", t("hwpSave"), () => this.saveEdits(), !file);
+      this.createCommandButton(barEl, "book-open", t("hwpBackToReadOnly"), () => this.enableReadMode(), !file);
     }
 
     this.createCommandButton(barEl, "file-search", t("aiReadContext"), () => this.openAgentAndRun(() => this.refreshDocumentContext()), !file);
@@ -1239,6 +1245,10 @@ class RhwpFileView extends FileView {
       await this.refreshDocumentContext();
     }
     if (!this.lastDocumentContext) return;
+
+    if (this.aiPromptEl && !this.aiPromptEl.value.trim()) {
+      this.aiPromptEl.value = t("aiDefaultPrompt");
+    }
 
     const request = this.aiPromptEl?.value.trim() || "";
     if (!request) return;
