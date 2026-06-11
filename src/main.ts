@@ -1069,6 +1069,7 @@ class RhwpFileView extends FileView {
   private autoApplyNextImageOperation = false;
   private cachedEditorSelectionText = "";
   private cleanupEditorSelectionTracking: (() => void) | null = null;
+  private editorSelectionPollInterval: number | null = null;
   private metaEl: HTMLElement | null = null;
   private currentFile: TFile | null = null;
   private mode: RhwpMode = "read";
@@ -1484,6 +1485,9 @@ class RhwpFileView extends FileView {
     const button = containerEl.createEl("button", { attr: { title: label, "aria-label": label } });
     setIcon(button, icon);
     button.createSpan({ text: label });
+    button.addEventListener("pointerdown", () => {
+      this.captureLiveSelectionIfPresent();
+    });
     button.addEventListener("click", () => {
       void handler();
     });
@@ -1641,10 +1645,16 @@ class RhwpFileView extends FileView {
       }
     };
 
+    const scheduleUpdate = (): void => {
+      update();
+      window.setTimeout(update, 0);
+      window.setTimeout(update, 120);
+    };
+
     const disposers: Array<() => void> = [];
     const addListener = (target: EventTarget, type: string): void => {
-      target.addEventListener(type, update);
-      disposers.push(() => target.removeEventListener(type, update));
+      target.addEventListener(type, scheduleUpdate);
+      disposers.push(() => target.removeEventListener(type, scheduleUpdate));
     };
 
     try {
@@ -1652,18 +1662,35 @@ class RhwpFileView extends FileView {
       const win = iframe.contentWindow;
       if (doc) {
         addListener(doc, "selectionchange");
+        addListener(doc, "pointerdown");
+        addListener(doc, "pointermove");
+        addListener(doc, "pointerup");
         addListener(doc, "mouseup");
+        addListener(doc, "mouseleave");
         addListener(doc, "keyup");
+        addListener(doc, "input");
+        addListener(doc, "beforeinput");
+        addListener(doc, "blur");
+        addListener(doc, "focusout");
       }
       if (win) {
+        addListener(win, "pointerup");
         addListener(win, "mouseup");
         addListener(win, "keyup");
+        addListener(win, "blur");
       }
     } catch {
       // Cross-origin editor builds can block iframe selection tracking.
     }
 
+    this.editorSelectionPollInterval = window.setInterval(update, 250);
+    update();
+
     this.cleanupEditorSelectionTracking = () => {
+      if (this.editorSelectionPollInterval !== null) {
+        window.clearInterval(this.editorSelectionPollInterval);
+        this.editorSelectionPollInterval = null;
+      }
       for (const dispose of disposers) {
         dispose();
       }
@@ -1673,7 +1700,8 @@ class RhwpFileView extends FileView {
   private readLiveIframeSelectionText(iframe: HTMLIFrameElement): string {
     const readAttempts: Array<() => string | undefined> = [
       () => iframe.contentWindow?.getSelection?.()?.toString(),
-      () => iframe.contentDocument?.getSelection?.()?.toString()
+      () => iframe.contentDocument?.getSelection?.()?.toString(),
+      () => this.readShadowRootSelectionText(iframe.contentDocument)
     ];
 
     for (const read of readAttempts) {
@@ -1683,6 +1711,26 @@ class RhwpFileView extends FileView {
       } catch {
         // Cross-origin editor builds can block iframe selection access.
       }
+    }
+
+    return "";
+  }
+
+  private readShadowRootSelectionText(root: Document | ShadowRoot | null | undefined): string {
+    if (!root) return "";
+
+    const maybeSelectionRoot = root as ShadowRoot & {
+      getSelection?: () => Selection | null;
+    };
+    const ownSelection = maybeSelectionRoot.getSelection?.()?.toString().trim() ?? "";
+    if (ownSelection) return ownSelection;
+
+    const elements = Array.from(root.querySelectorAll("*"));
+    for (const element of elements) {
+      const shadowRoot = element.shadowRoot;
+      if (!shadowRoot) continue;
+      const shadowSelection = this.readShadowRootSelectionText(shadowRoot);
+      if (shadowSelection) return shadowSelection;
     }
 
     return "";
