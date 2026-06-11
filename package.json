@@ -1,6 +1,6 @@
 {
   "name": "obsidian-ai-rhwp-editor",
-  "version": "0.2.6",
+  "version": "0.2.7",
   "description": "AI-assisted HWP/HWPX editor for Obsidian, powered by rhwp and local AI CLIs.",
   "main": "main.js",
   "scripts": {

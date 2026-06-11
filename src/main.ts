@@ -61,6 +61,7 @@ interface RhwpSettings {
   largeFileBehavior: LargeFileBehavior;
   largeFileThresholdMb: number;
   aiPanelOpen: boolean;
+  aiPanelWidthPx: number;
   aiProvider: RhwpAiProviderId;
   ai: RhwpAiProviderSettings;
 }
@@ -76,6 +77,7 @@ const DEFAULT_SETTINGS: RhwpSettings = {
   largeFileBehavior: "ask",
   largeFileThresholdMb: 50,
   aiPanelOpen: true,
+  aiPanelWidthPx: 520,
   aiProvider: "claude",
   ai: { ...DEFAULT_AI_PROVIDER_SETTINGS }
 };
@@ -126,6 +128,7 @@ const I18N = {
     ai: "AI",
     aiAgent: "AI Agent",
     aiPanelTitle: "AI Agent",
+    aiPanelResize: "AI Agent panel width",
     aiProvider: "Provider",
     aiPromptPlaceholder: "AI에게 이 HWP/HWPX 문서를 읽고 안전한 편집 작업을 한국어로 만들게 하세요...",
     aiDefaultPrompt: "이 HWP/HWPX 문서를 읽고 문서 구조와 내용을 분석한 뒤, 사용자가 바로 적용할 수 있는 안전한 편집 작업을 한국어로 제안해줘. 가능한 경우 유효한 operation JSON만 반환해줘.",
@@ -235,6 +238,7 @@ const I18N = {
     ai: "AI",
     aiAgent: "AI Agent",
     aiPanelTitle: "AI Agent",
+    aiPanelResize: "AI Agent 창 폭 조절",
     aiProvider: "제공자",
     aiPromptPlaceholder: "AI에게 이 HWP/HWPX 문서를 읽고 안전한 작업을 제안하게 하세요...",
     aiDefaultPrompt: "이 HWP/HWPX 문서를 읽고 문서 구조와 내용을 분석한 뒤, 사용자가 바로 적용할 수 있는 안전한 편집 작업을 한국어로 제안해줘. 가능한 경우 유효한 operation JSON만 반환해줘.",
@@ -1196,11 +1200,72 @@ class RhwpFileView extends FileView {
 
   private createWorkspace(): void {
     const workspaceEl = this.contentEl.createDiv({ cls: "rhwp-workspace" });
+    workspaceEl.style.setProperty("--rhwp-ai-panel-width", `${this.plugin.settings.aiPanelWidthPx}px`);
     this.pagesEl = workspaceEl.createDiv({ cls: "rhwp-pages" });
     this.aiPanelEl = null;
     if (this.plugin.settings.aiPanelOpen || this.currentFile) {
+      this.renderAiPanelResizeHandle(workspaceEl);
       this.renderAiPanel(workspaceEl);
     }
+  }
+
+  private renderAiPanelResizeHandle(workspaceEl: HTMLElement): void {
+    const handleEl = workspaceEl.createEl("div", {
+      cls: "rhwp-ai-resizer",
+      attr: {
+        role: "separator",
+        "aria-label": t("aiPanelResize"),
+        "aria-orientation": "vertical",
+        title: t("aiPanelResize")
+      }
+    });
+
+    handleEl.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0) return;
+      event.preventDefault();
+
+      const startX = event.clientX;
+      const startWidth = this.plugin.settings.aiPanelWidthPx;
+      const pointerId = event.pointerId;
+      handleEl.setPointerCapture(pointerId);
+      activeDocument.body.addClass("rhwp-resizing-ai-panel");
+
+      const updateWidth = (clientX: number): number => {
+        const delta = clientX - startX;
+        const width = clampAiPanelWidth(startWidth - delta, workspaceEl.clientWidth);
+        workspaceEl.style.setProperty("--rhwp-ai-panel-width", `${width}px`);
+        handleEl.setAttribute("aria-valuenow", String(Math.round(width)));
+        return width;
+      };
+
+      const onPointerMove = (moveEvent: PointerEvent): void => {
+        updateWidth(moveEvent.clientX);
+      };
+
+      const onPointerUp = (upEvent: PointerEvent): void => {
+        const width = updateWidth(upEvent.clientX);
+        this.plugin.settings.aiPanelWidthPx = width;
+        void this.plugin.saveSettings();
+        activeDocument.body.removeClass("rhwp-resizing-ai-panel");
+        handleEl.releasePointerCapture(pointerId);
+        activeWindow.removeEventListener("pointermove", onPointerMove);
+        activeWindow.removeEventListener("pointerup", onPointerUp);
+        activeWindow.removeEventListener("pointercancel", onPointerCancel);
+      };
+
+      const onPointerCancel = (): void => {
+        workspaceEl.style.setProperty("--rhwp-ai-panel-width", `${startWidth}px`);
+        activeDocument.body.removeClass("rhwp-resizing-ai-panel");
+        handleEl.releasePointerCapture(pointerId);
+        activeWindow.removeEventListener("pointermove", onPointerMove);
+        activeWindow.removeEventListener("pointerup", onPointerUp);
+        activeWindow.removeEventListener("pointercancel", onPointerCancel);
+      };
+
+      activeWindow.addEventListener("pointermove", onPointerMove);
+      activeWindow.addEventListener("pointerup", onPointerUp);
+      activeWindow.addEventListener("pointercancel", onPointerCancel);
+    });
   }
 
   private renderCommandBar(file: TFile | null): void {
@@ -2253,6 +2318,10 @@ function parseSettings(data: unknown): Partial<RhwpSettings> {
     settings.aiPanelOpen = source.aiPanelOpen;
   }
 
+  if (typeof source.aiPanelWidthPx === "number" && Number.isFinite(source.aiPanelWidthPx)) {
+    settings.aiPanelWidthPx = clampAiPanelWidth(source.aiPanelWidthPx);
+  }
+
   if (typeof source.aiProvider === "string") {
     settings.aiProvider = normalizeProviderId(source.aiProvider);
   }
@@ -2274,6 +2343,13 @@ function parseSettings(data: unknown): Partial<RhwpSettings> {
   }
 
   return settings;
+}
+
+function clampAiPanelWidth(width: number, workspaceWidth?: number): number {
+  const minWidth = 320;
+  const maxByViewport = Math.max(minWidth, Math.round((workspaceWidth ?? activeWindow.innerWidth) * 0.72));
+  const maxWidth = Math.min(960, maxByViewport);
+  return Math.min(maxWidth, Math.max(minWidth, Math.round(width)));
 }
 
 function appendSvg(containerEl: HTMLElement, svgText: string): void {

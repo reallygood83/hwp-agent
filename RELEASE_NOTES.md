@@ -1,5 +1,16 @@
 # Release Notes
 
+## 0.2.7
+
+### Added
+
+- Added a draggable divider between the rHWP document area and the AI Agent panel.
+- Saved the resized AI Agent panel width in plugin settings so the chosen layout persists across renders.
+
+### Verified
+
+- `npm run package:release`
+
 ## 0.2.6
 
 ### Added
