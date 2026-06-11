@@ -1,4 +1,4 @@
-import { TFile, type App } from "obsidian";
+import { FileSystemAdapter, TFile, type App } from "obsidian";
 import { HwpDocument } from "@rhwp/core";
 import type { RhwpOperation, RhwpOperationEnvelope } from "./operations";
 
@@ -117,7 +117,7 @@ async function applyOperation(
       if (operation.source.kind === "generated_file") {
         assertGeneratedImageLooksReal(imageBytes, operation.source.path);
       }
-      const extension = getExtension(operation.source.path) || "png";
+      const extension = detectImageExtension(imageBytes, operation.source.path);
       return tryJson(
         doc.insertPicture(
           operation.target.sectionIndex,
@@ -212,7 +212,8 @@ function assertGeneratedImageLooksReal(imageBytes: ArrayBuffer, sourcePath: stri
 }
 
 function buildImagePathCandidates(currentFile: TFile, sourcePath: string): string[] {
-  const normalized = sourcePath.replace(/\\/g, "/").replace(/^\/+/, "");
+  const normalizedInput = sourcePath.trim().replace(/\\/g, "/");
+  const normalized = toVaultRelativePath(currentFile, normalizedInput) ?? normalizedInput.replace(/^\/+/, "");
   const parentPath = currentFile.parent?.path;
   const candidates = [normalized];
 
@@ -221,6 +222,57 @@ function buildImagePathCandidates(currentFile: TFile, sourcePath: string): strin
   }
 
   return [...new Set(candidates.map((candidate) => candidate.replace(/\/+/g, "/")))];
+}
+
+function toVaultRelativePath(currentFile: TFile, sourcePath: string): string | null {
+  const adapter = currentFile.vault.adapter;
+  const basePath =
+    adapter instanceof FileSystemAdapter
+      ? adapter.getBasePath()
+      : "getBasePath" in adapter && typeof adapter.getBasePath === "function"
+        ? adapter.getBasePath()
+        : "basePath" in adapter && typeof adapter.basePath === "string"
+          ? adapter.basePath
+          : "";
+  if (!basePath) return null;
+
+  const normalizedBasePath = basePath.replace(/\\/g, "/").replace(/\/+$/, "");
+  if (sourcePath === normalizedBasePath) return "";
+  if (!sourcePath.startsWith(`${normalizedBasePath}/`)) return null;
+  return sourcePath.slice(normalizedBasePath.length + 1);
+}
+
+function detectImageExtension(imageBytes: ArrayBuffer, sourcePath: string): string {
+  const bytes = new Uint8Array(imageBytes);
+  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return "jpg";
+  if (
+    bytes.length >= 8 &&
+    bytes[0] === 0x89 &&
+    bytes[1] === 0x50 &&
+    bytes[2] === 0x4e &&
+    bytes[3] === 0x47 &&
+    bytes[4] === 0x0d &&
+    bytes[5] === 0x0a &&
+    bytes[6] === 0x1a &&
+    bytes[7] === 0x0a
+  ) {
+    return "png";
+  }
+  if (bytes.length >= 6 && bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46) return "gif";
+  if (
+    bytes.length >= 12 &&
+    bytes[0] === 0x52 &&
+    bytes[1] === 0x49 &&
+    bytes[2] === 0x46 &&
+    bytes[3] === 0x46 &&
+    bytes[8] === 0x57 &&
+    bytes[9] === 0x45 &&
+    bytes[10] === 0x42 &&
+    bytes[11] === 0x50
+  ) {
+    return "webp";
+  }
+  return getExtension(sourcePath) || "png";
 }
 
 function readCreatedTableRef(value: unknown, fallbackParaIdx: number): { paraIdx: number; controlIdx: number } {
