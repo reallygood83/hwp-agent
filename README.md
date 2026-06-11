@@ -22,7 +22,7 @@ The OOO QA plan lives in [`prj/OOO_QA.md`](prj/OOO_QA.md).
 
 ---
 
-[![Version](https://img.shields.io/badge/version-0.2.12-blue?style=flat-square)](https://github.com/reallygood83/hwp-agent)
+[![Version](https://img.shields.io/badge/version-0.2.13-blue?style=flat-square)](https://github.com/reallygood83/hwp-agent)
 [![License](https://img.shields.io/github/license/reallygood83/hwp-agent?style=flat-square)](LICENSE)
 [![Obsidian](https://img.shields.io/badge/Obsidian-desktop%20plugin-7C3AED?style=flat-square)](https://obsidian.md)
 [![HWP/HWPX](https://img.shields.io/badge/HWP%2FHWPX-rhwp-2F855A?style=flat-square)](https://github.com/edwardkim/rhwp)
@@ -39,7 +39,7 @@ Open, create, and edit `.hwp` and `.hwpx` files in Obsidian Desktop with [rhwp](
 4. In `Settings > Community plugins > Installed plugins`, search for `HWP Agent` or `AI rHWP Editor`.
 5. Enable `HWP Agent - AI rHWP Editor`.
 
-Latest release: [`0.2.12`](https://github.com/reallygood83/hwp-agent/releases/tag/0.2.12)
+Latest release: [`0.2.13`](https://github.com/reallygood83/hwp-agent/releases/tag/0.2.13)
 
 BRAT installs the plugin files first, but Obsidian may still require manually
 enabling the installed plugin. The plugin folder/id is `ai-rhwp-editor`; the
@@ -68,6 +68,8 @@ BRAT은 먼저 플러그인 파일을 설치하고, Obsidian에서는 설치된 
 - Applies supported operations through rHWP core APIs, including text insertion, text replacement, table creation/cell edits, and vault image insertion.
 - Provides `새 작업` to clear the current AI prompt/selection/pending operation and `종료` to stop a running local AI CLI task.
 - Lets users drag the divider between the rHWP document area and AI Agent panel to resize the panel width.
+- Caches rHWP editor iframe selections before toolbar focus changes so selected text can be used as AI context.
+- Auto-applies image-only operation JSON from image prompts so generated images are inserted into the HWP/HWPX document, not only saved in the vault.
 - Runs Codex planning with plugin/app/MCP loading minimized and rejects tiny placeholder generated images.
 - Keeps Windows support in the provider layer with `.cmd`, PowerShell-friendly command lookup, and WSL fallback candidates.
 

@@ -169,6 +169,7 @@ const I18N = {
     aiUndoReady: "복원 지점이 준비되었습니다. 마음에 들지 않으면 되돌리기를 누르세요.",
     aiUndoUnavailable: "되돌릴 AI 적용 기록이 없습니다.",
     aiUndoRestored: "{{name}} 문서를 AI 적용 전 상태로 되돌렸습니다.",
+    aiImageAutoApplying: "Image operation detected. Inserting the generated image into the HWP/HWPX document...",
     aiSelectionEmpty: "드래그로 선택된 텍스트를 찾지 못했습니다. 편집 영역에서 텍스트를 선택한 뒤 다시 눌러 주세요.",
     aiSelectionCaptured: "선택 영역 {{count}}자를 AI 컨텍스트로 사용합니다.",
     aiSelectionPrompt: "아래 선택 영역만 문맥으로 보고, 내 요청에 맞게 한국어로 자연스럽게 수정한 뒤 선택 영역을 대치하는 replace_selection 작업 JSON만 만들어줘.",
@@ -287,6 +288,7 @@ const I18N = {
     aiUndoReady: "복원 지점이 준비되었습니다. 마음에 들지 않으면 되돌리기를 누르세요.",
     aiUndoUnavailable: "되돌릴 AI 적용 기록이 없습니다.",
     aiUndoRestored: "{{name}} 문서를 AI 적용 전 상태로 되돌렸습니다.",
+    aiImageAutoApplying: "이미지 작업을 감지했습니다. 생성된 이미지를 HWP/HWPX 문서에 바로 삽입합니다...",
     aiSelectionEmpty: "드래그로 선택된 텍스트를 찾지 못했습니다. 편집 영역에서 텍스트를 선택한 뒤 다시 눌러 주세요.",
     aiSelectionCaptured: "선택 영역 {{count}}자를 AI 컨텍스트로 사용합니다.",
     aiSelectionPrompt: "아래 선택 영역만 문맥으로 보고, 내 요청에 맞게 한국어로 자연스럽게 수정한 뒤 선택 영역을 대치하는 replace_selection 작업 JSON만 만들어줘.",
@@ -993,6 +995,9 @@ class RhwpFileView extends FileView {
   private lastUndoSnapshot: RhwpUndoSnapshot | null = null;
   private activeProvider: RhwpAiProvider | null = null;
   private activeAiRunId = 0;
+  private autoApplyNextImageOperation = false;
+  private cachedEditorSelectionText = "";
+  private cleanupEditorSelectionTracking: (() => void) | null = null;
   private metaEl: HTMLElement | null = null;
   private currentFile: TFile | null = null;
   private mode: RhwpMode = "read";
@@ -1306,7 +1311,7 @@ class RhwpFileView extends FileView {
     this.createCommandButton(barEl, "wand-sparkles", t("aiApply"), () => this.openAgentAndRun(() => this.applyLastOperationEnvelope()), !file);
     this.createCommandButton(barEl, "undo-2", t("aiUndo"), () => this.openAgentAndRun(() => this.undoLastAiApply()), !this.canUndoAiApply());
     this.createCommandButton(barEl, "table-2", t("hwpTable"), () => this.openAgentWithPrompt(t("aiTablePrompt")), !file);
-    this.createCommandButton(barEl, "image", t("hwpImage"), () => this.openAgentWithPrompt(this.getImagePrompt()), !file);
+    this.createCommandButton(barEl, "image", t("hwpImage"), () => this.openAgentWithPrompt(this.getImagePrompt(), true), !file);
   }
 
   private createCommandButton(
@@ -1338,8 +1343,9 @@ class RhwpFileView extends FileView {
     this.aiPromptEl?.focus();
   }
 
-  private async openAgentWithPrompt(prompt: string): Promise<void> {
+  private async openAgentWithPrompt(prompt: string, autoApplyImageOperation = false): Promise<void> {
     await this.openAgentPanel();
+    this.autoApplyNextImageOperation = autoApplyImageOperation;
     if (this.aiPromptEl) {
       this.aiPromptEl.value = prompt;
       this.aiPromptEl.focus();
@@ -1416,6 +1422,7 @@ class RhwpFileView extends FileView {
     this.cancelActiveAiTask(false);
     this.lastSelectedContext = null;
     this.lastOperationEnvelope = null;
+    this.autoApplyNextImageOperation = false;
     if (this.lastDocumentContext) {
       this.lastDocumentContext.selectedText = null;
     }
@@ -1529,8 +1536,70 @@ class RhwpFileView extends FileView {
 
   private readEditorSelectionText(): string {
     const iframe = this.editor?.element;
-    if (!iframe) return "";
+    if (!iframe) return this.cachedEditorSelectionText;
 
+    const readAttempts: Array<() => string | undefined> = [
+      () => iframe.contentWindow?.getSelection?.()?.toString(),
+      () => iframe.contentDocument?.getSelection?.()?.toString()
+    ];
+
+    for (const read of readAttempts) {
+      try {
+        const value = read()?.trim() ?? "";
+        if (value) {
+          this.cachedEditorSelectionText = value;
+          return value;
+        }
+      } catch {
+        // Cross-origin editor builds can block iframe selection access.
+      }
+    }
+
+    return this.cachedEditorSelectionText;
+  }
+
+  private installEditorSelectionTracking(iframe: HTMLIFrameElement): void {
+    this.cleanupEditorSelectionTracking?.();
+    this.cleanupEditorSelectionTracking = null;
+    this.cachedEditorSelectionText = "";
+
+    const update = (): void => {
+      const selected = this.readLiveIframeSelectionText(iframe);
+      if (selected) {
+        this.cachedEditorSelectionText = selected;
+      }
+    };
+
+    const disposers: Array<() => void> = [];
+    const addListener = (target: EventTarget, type: string): void => {
+      target.addEventListener(type, update);
+      disposers.push(() => target.removeEventListener(type, update));
+    };
+
+    try {
+      const doc = iframe.contentDocument;
+      const win = iframe.contentWindow;
+      if (doc) {
+        addListener(doc, "selectionchange");
+        addListener(doc, "mouseup");
+        addListener(doc, "keyup");
+      }
+      if (win) {
+        addListener(win, "mouseup");
+        addListener(win, "keyup");
+      }
+    } catch {
+      // Cross-origin editor builds can block iframe selection tracking.
+    }
+
+    this.cleanupEditorSelectionTracking = () => {
+      for (const dispose of disposers) {
+        dispose();
+      }
+    };
+  }
+
+  private readLiveIframeSelectionText(iframe: HTMLIFrameElement): string {
     const readAttempts: Array<() => string | undefined> = [
       () => iframe.contentWindow?.getSelection?.()?.toString(),
       () => iframe.contentDocument?.getSelection?.()?.toString()
@@ -1615,12 +1684,25 @@ class RhwpFileView extends FileView {
       this.lastOperationEnvelope = validateOperationEnvelope(parsed);
       new Notice(t("aiOperationValid"));
       this.writeAiOutput(`${t("aiOperationReady")}\n\n${JSON.stringify(this.lastOperationEnvelope, null, 2)}`);
+      if (this.shouldAutoApplyImageOperation(this.lastOperationEnvelope)) {
+        this.autoApplyNextImageOperation = false;
+        new Notice(t("aiImageAutoApplying"));
+        this.writeAiOutput(`${t("aiImageAutoApplying")}\n\n${JSON.stringify(this.lastOperationEnvelope, null, 2)}`);
+        await this.applyLastOperationEnvelope();
+      }
       return true;
     } catch (error) {
       this.lastOperationEnvelope = null;
+      this.autoApplyNextImageOperation = false;
       new Notice(t("aiOperationInvalid", { message: getErrorMessage(error) }));
       return false;
     }
+  }
+
+  private shouldAutoApplyImageOperation(envelope: RhwpOperationEnvelope): boolean {
+    return this.autoApplyNextImageOperation &&
+      envelope.operations.length > 0 &&
+      envelope.operations.every((operation) => operation.type === "insert_image");
   }
 
   private captureLiveSelectionIfPresent(): void {
@@ -1890,6 +1972,7 @@ class RhwpFileView extends FileView {
 
       const buffer = await this.app.vault.readBinary(file);
       const result = await editor.loadFile(buffer, file.name);
+      this.installEditorSelectionTracking(editor.element);
 
       if (this.metaEl) {
         this.metaEl.setText(pageCountText(result.pageCount, "edit"));
@@ -2065,6 +2148,9 @@ class RhwpFileView extends FileView {
   }
 
   private destroyEditor(): void {
+    this.cleanupEditorSelectionTracking?.();
+    this.cleanupEditorSelectionTracking = null;
+    this.cachedEditorSelectionText = "";
     this.editor?.destroy();
     this.editor = null;
   }
