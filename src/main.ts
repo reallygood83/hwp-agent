@@ -144,7 +144,8 @@ const I18N = {
     aiOperationReady: "Valid operation plan ready. Review it, then apply when ready.",
     aiOperationValid: "Operation JSON is valid.",
     aiOperationInvalid: "Operation JSON is invalid: {{message}}",
-    aiNoOperations: "No valid AI operation plan is ready.",
+    aiNoOperations: "적용할 유효한 AI 작업 계획이 아직 없습니다. 먼저 계획을 만들고 다시 적용해 주세요.",
+    aiPlanningBeforeApply: "적용할 작업 계획이 없어 AI가 먼저 계획을 생성합니다...",
     aiApplied: "Applied {{count}} AI operations to {{name}}.",
     aiApplyFailed: "Failed to apply AI operations: {{message}}",
     settingFormatDesc: "HWP is the default because HWPX export/rendering is still less consistent in rhwp.",
@@ -236,7 +237,8 @@ const I18N = {
     aiOperationReady: "유효한 작업 계획이 준비되었습니다. 내용을 확인한 뒤 적용하세요.",
     aiOperationValid: "작업 JSON이 유효합니다.",
     aiOperationInvalid: "작업 JSON이 유효하지 않습니다: {{message}}",
-    aiNoOperations: "적용할 유효한 AI 작업 계획이 없습니다.",
+    aiNoOperations: "적용할 유효한 AI 작업 계획이 아직 없습니다. 먼저 계획을 만들고 다시 적용해 주세요.",
+    aiPlanningBeforeApply: "적용할 작업 계획이 없어 AI가 먼저 계획을 생성합니다...",
     aiApplied: "{{name}}에 AI 작업 {{count}}개를 적용했습니다.",
     aiApplyFailed: "AI 작업 적용 실패: {{message}}",
     settingFormatDesc: "rhwp의 HWPX 내보내기/렌더링 일관성이 아직 낮아서 HWP를 기본값으로 둡니다.",
@@ -781,6 +783,65 @@ function t(key: I18nKey, values: Record<string, string | number> = {}): string {
   });
 }
 
+function parseAiOperationJson(response: string): unknown {
+  const trimmed = response.trim();
+  const candidates = [
+    trimmed,
+    ...[...trimmed.matchAll(/```(?:json)?\s*([\s\S]*?)```/gi)].map((match) => match[1].trim()),
+    extractBalancedJsonObject(trimmed)
+  ].filter((candidate): candidate is string => !!candidate);
+
+  let lastError: unknown = null;
+  for (const candidate of candidates) {
+    try {
+      return JSON.parse(candidate);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error("No valid JSON object found in AI response.");
+}
+
+function extractBalancedJsonObject(text: string): string | null {
+  const start = text.indexOf("{");
+  if (start === -1) return null;
+
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let index = start; index < text.length; index += 1) {
+    const char = text[index];
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+
+    if (char === "\\") {
+      escaped = inString;
+      continue;
+    }
+
+    if (char === "\"") {
+      inString = !inString;
+      continue;
+    }
+
+    if (inString) continue;
+
+    if (char === "{") depth += 1;
+    if (char === "}") {
+      depth -= 1;
+      if (depth === 0) {
+        return text.slice(start, index + 1);
+      }
+    }
+  }
+
+  return null;
+}
+
 function providerLabel(id: RhwpAiProviderId): string {
   if (id === "codex") return "Codex";
   if (id === "antigravity") return "Antigravity";
@@ -1102,7 +1163,9 @@ class RhwpFileView extends FileView {
 
     this.createCommandButton(barEl, "file-search", t("aiReadContext"), () => this.openAgentAndRun(() => this.refreshDocumentContext()), !file);
     this.createCommandButton(barEl, "bot", t("aiAgent"), () => this.openAgentPanel());
-    this.createCommandButton(barEl, "send", t("aiPlan"), () => this.openAgentAndRun(() => this.planWithSelectedProvider()), !file);
+    this.createCommandButton(barEl, "send", t("aiPlan"), () => this.openAgentAndRun(async () => {
+      await this.planWithSelectedProvider();
+    }), !file);
     this.createCommandButton(barEl, "wand-sparkles", t("aiApply"), () => this.openAgentAndRun(() => this.applyLastOperationEnvelope()), !file);
     this.createCommandButton(barEl, "table-2", t("hwpTable"), () => this.openAgentWithPrompt(t("aiTablePrompt")), !file);
     this.createCommandButton(barEl, "image", t("hwpImage"), () => this.openAgentWithPrompt(t("aiImagePrompt")), !file);
@@ -1179,7 +1242,9 @@ class RhwpFileView extends FileView {
     const actionsEl = this.aiPanelEl.createDiv({ cls: "rhwp-ai-actions" });
     this.createAiActionButton(actionsEl, "file-search", t("aiReadContext"), () => this.refreshDocumentContext());
     this.createAiActionButton(actionsEl, "activity", t("aiDiagnose"), () => this.diagnoseSelectedProvider());
-    this.createAiActionButton(actionsEl, "send", t("aiPlan"), () => this.planWithSelectedProvider());
+    this.createAiActionButton(actionsEl, "send", t("aiPlan"), async () => {
+      await this.planWithSelectedProvider();
+    });
     this.createAiActionButton(actionsEl, "wand-sparkles", t("aiApply"), () => this.applyLastOperationEnvelope());
 
     this.updateAiPanelStatus(statusEl);
@@ -1239,19 +1304,19 @@ class RhwpFileView extends FileView {
     this.writeAiOutput(JSON.stringify(diagnostic, null, 2), !diagnostic.ok);
   }
 
-  private async planWithSelectedProvider(): Promise<void> {
-    if (!this.currentFile) return;
+  private async planWithSelectedProvider(): Promise<boolean> {
+    if (!this.currentFile) return false;
     if (!this.lastDocumentContext) {
       await this.refreshDocumentContext();
     }
-    if (!this.lastDocumentContext) return;
+    if (!this.lastDocumentContext) return false;
 
     if (this.aiPromptEl && !this.aiPromptEl.value.trim()) {
       this.aiPromptEl.value = t("aiDefaultPrompt");
     }
 
     const request = this.aiPromptEl?.value.trim() || "";
-    if (!request) return;
+    if (!request) return false;
 
     const provider = this.createSelectedProvider();
     this.writeAiOutput(t("aiRunning"));
@@ -1267,23 +1332,34 @@ class RhwpFileView extends FileView {
       if (event.type === "error") this.writeAiOutput(event.content, true);
     }
 
-    if (!response.trim()) return;
+    if (!response.trim()) return false;
     this.writeAiOutput(response.trim());
     try {
-      const parsed = JSON.parse(response.trim());
+      const parsed = parseAiOperationJson(response);
       this.lastOperationEnvelope = validateOperationEnvelope(parsed);
       new Notice(t("aiOperationValid"));
       this.writeAiOutput(`${t("aiOperationReady")}\n\n${JSON.stringify(this.lastOperationEnvelope, null, 2)}`);
+      return true;
     } catch (error) {
       this.lastOperationEnvelope = null;
       new Notice(t("aiOperationInvalid", { message: getErrorMessage(error) }));
+      return false;
     }
   }
 
   private async applyLastOperationEnvelope(): Promise<void> {
-    if (!this.currentFile || !this.lastOperationEnvelope) {
+    if (!this.currentFile) {
       new Notice(t("aiNoOperations"));
       return;
+    }
+
+    if (!this.lastOperationEnvelope) {
+      new Notice(t("aiPlanningBeforeApply"));
+      const planned = await this.planWithSelectedProvider();
+      if (!planned || !this.lastOperationEnvelope) {
+        new Notice(t("aiNoOperations"));
+        return;
+      }
     }
 
     try {

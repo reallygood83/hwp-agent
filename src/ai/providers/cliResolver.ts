@@ -93,6 +93,19 @@ export function detectCliExecutablePath(kind: CliKind, pathValue?: string): stri
 }
 
 function resolutionForPath(kind: CliKind, executablePath: string): CliResolution {
+  if (kind === "codex") {
+    const nodePath = nodeBesideExecutable(executablePath);
+    const codexJs = realFilePath(executablePath);
+    if (nodePath && codexJs && /@openai[\\/]codex[\\/]bin[\\/]codex\.js$/i.test(codexJs)) {
+      return {
+        executablePath: nodePath,
+        shell: false,
+        argsPrefix: [codexJs],
+        detail: `Using Codex Node entrypoint ${codexJs} with ${nodePath}`
+      };
+    }
+  }
+
   if (process.platform === "win32" && kind === "codex" && /\.cmd$/i.test(executablePath)) {
     const codexJs = path.join(
       path.dirname(executablePath),
@@ -119,6 +132,20 @@ function resolutionForPath(kind: CliKind, executablePath: string): CliResolution
     argsPrefix: [],
     detail: `Using ${executablePath}`
   };
+}
+
+function realFilePath(filePath: string): string | null {
+  try {
+    return fs.realpathSync(filePath);
+  } catch {
+    return null;
+  }
+}
+
+function nodeBesideExecutable(executablePath: string): string | null {
+  const nodeName = process.platform === "win32" ? "node.exe" : "node";
+  const candidate = path.join(path.dirname(executablePath), nodeName);
+  return isFile(candidate) ? candidate : null;
 }
 
 function cliNames(kind: CliKind): string[] {
@@ -153,11 +180,25 @@ function defaultCandidates(kind: CliKind): string[] {
 
   const binary = kind === "antigravity" ? "agy" : kind;
   return [
+    ...nvmCandidates(binary),
     `/opt/homebrew/bin/${binary}`,
     `/usr/local/bin/${binary}`,
     path.join(home, ".local", "bin", binary),
     path.join(home, ".npm-global", "bin", binary)
   ];
+}
+
+function nvmCandidates(binary: string): string[] {
+  const versionsDir = path.join(os.homedir(), ".nvm", "versions", "node");
+  try {
+    return fs
+      .readdirSync(versionsDir)
+      .sort()
+      .reverse()
+      .map((version) => path.join(versionsDir, version, "bin", binary));
+  } catch {
+    return [];
+  }
 }
 
 function resolveWsl(kind: CliKind): CliResolution | null {

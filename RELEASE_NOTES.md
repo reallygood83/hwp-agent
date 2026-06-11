@@ -1,5 +1,17 @@
 # Release Notes
 
+## 0.2.3
+
+### Fixed
+
+- Made Apply automatically run Plan first when no valid AI operation plan is ready.
+- Parsed AI operation JSON from plain JSON, fenced `json` code blocks, or surrounding explanatory text.
+- Ran Codex CLI through the Node executable beside the selected Codex script to avoid broken shell PATH / Homebrew Node issues inside Obsidian.
+
+### Verified
+
+- `npm run package:release`
+
 ## 0.2.2
 
 ### Fixed
