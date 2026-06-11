@@ -1,6 +1,6 @@
-# AI rHWP Editor for Obsidian
+# HWP Agent - AI rHWP Editor for Obsidian
 
-AI rHWP Editor is a new development fork of rHWP Editor. Its goal is to combine
+HWP Agent - AI rHWP Editor is a new development fork of rHWP Editor. Its goal is to combine
 Obsidian, rHWP, and local AI CLIs so Claude Code, Codex, and Antigravity can read
 the current HWP/HWPX document and propose safe rHWP operations for text, tables,
 images, and generated document blocks.
@@ -22,7 +22,7 @@ The OOO QA plan lives in [`prj/OOO_QA.md`](prj/OOO_QA.md).
 
 ---
 
-[![Version](https://img.shields.io/badge/version-0.1.1-blue?style=flat-square)](https://github.com/reallygood83/hwp-agent)
+[![Version](https://img.shields.io/badge/version-0.1.2-blue?style=flat-square)](https://github.com/reallygood83/hwp-agent)
 [![License](https://img.shields.io/github/license/reallygood83/hwp-agent?style=flat-square)](LICENSE)
 [![Obsidian](https://img.shields.io/badge/Obsidian-desktop%20plugin-7C3AED?style=flat-square)](https://obsidian.md)
 [![HWP/HWPX](https://img.shields.io/badge/HWP%2FHWPX-rhwp-2F855A?style=flat-square)](https://github.com/edwardkim/rhwp)
@@ -36,9 +36,18 @@ Open, create, and edit `.hwp` and `.hwpx` files in Obsidian Desktop with [rhwp](
 1. Install the Obsidian BRAT community plugin.
 2. Run `BRAT: Add a beta plugin for testing`.
 3. Enter `https://github.com/reallygood83/hwp-agent`.
-4. Enable `AI rHWP Editor` in Obsidian community plugins.
+4. In `Settings > Community plugins > Installed plugins`, search for `HWP Agent` or `AI rHWP Editor`.
+5. Enable `HWP Agent - AI rHWP Editor`.
 
-Latest release: [`0.1.1`](https://github.com/reallygood83/hwp-agent/releases/tag/0.1.1)
+Latest release: [`0.1.2`](https://github.com/reallygood83/hwp-agent/releases/tag/0.1.2)
+
+BRAT installs the plugin files first, but Obsidian may still require manually
+enabling the installed plugin. The plugin folder/id is `ai-rhwp-editor`; the
+visible plugin name is `HWP Agent - AI rHWP Editor`.
+
+BRAT은 먼저 플러그인 파일을 설치하고, Obsidian에서는 설치된 플러그인을 사용자가
+직접 켜야 할 수 있습니다. 설치 폴더/id는 `ai-rhwp-editor`이고, 플러그인 목록에
+보이는 이름은 `HWP Agent - AI rHWP Editor`입니다.
 
 ## AI features
 

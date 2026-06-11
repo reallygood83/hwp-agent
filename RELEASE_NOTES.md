@@ -1,5 +1,16 @@
 # Release Notes
 
+## 0.1.2
+
+### Changed
+
+- Renamed the visible Obsidian plugin name to `HWP Agent - AI rHWP Editor` so users who install from `reallygood83/hwp-agent` can find it more easily in Community plugins.
+- Clarified the BRAT install flow: the plugin id/folder is `ai-rhwp-editor`, while the visible plugin name is `HWP Agent - AI rHWP Editor`.
+
+### Verified
+
+- `npm run package:release`
+
 ## 0.1.1
 
 ### Added
