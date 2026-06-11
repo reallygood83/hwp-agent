@@ -114,6 +114,9 @@ async function applyOperation(
       );
     case "insert_image": {
       const imageBytes = await readImageBytes(app, file, operation.source.path);
+      if (operation.source.kind === "generated_file") {
+        assertGeneratedImageLooksReal(imageBytes, operation.source.path);
+      }
       const extension = getExtension(operation.source.path) || "png";
       return tryJson(
         doc.insertPicture(
@@ -197,6 +200,15 @@ async function readImageBytes(app: App, currentFile: TFile, sourcePath: string):
   }
 
   throw new Error(`Image file not found in vault: ${sourcePath}`);
+}
+
+function assertGeneratedImageLooksReal(imageBytes: ArrayBuffer, sourcePath: string): void {
+  const minGeneratedImageBytes = 1024;
+  if (imageBytes.byteLength >= minGeneratedImageBytes) return;
+  throw new Error(
+    `Generated image is too small (${imageBytes.byteLength} bytes): ${sourcePath}. ` +
+    "Codex likely created a placeholder instead of a real generated image. Try again after enabling a real Codex image-generation tool/model."
+  );
 }
 
 function buildImagePathCandidates(currentFile: TFile, sourcePath: string): string[] {

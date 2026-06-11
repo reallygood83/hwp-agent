@@ -1,7 +1,7 @@
 {
   "id": "ai-rhwp-editor",
   "name": "HWP Agent - AI rHWP Editor",
-  "version": "0.2.7",
+  "version": "0.2.8",
   "minAppVersion": "1.8.7",
   "description": "Read, create, and edit HWP/HWPX documents in Obsidian with rhwp and local AI CLIs.",
   "author": "reallygood83",

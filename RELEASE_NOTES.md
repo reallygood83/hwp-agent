@@ -1,5 +1,17 @@
 # Release Notes
 
+## 0.2.8
+
+### Fixed
+
+- Reduced noisy Codex CLI startup by disabling plugin/app/MCP loading for non-interactive HWP operation planning.
+- Clarified Codex image prompts so generated image operations must come from a real image-generation capability, not a handwritten placeholder file.
+- Rejected tiny generated image files during apply because they usually mean Codex created a placeholder instead of a real image asset.
+
+### Verified
+
+- `npm run package:release`
+
 ## 0.2.7
 
 ### Added

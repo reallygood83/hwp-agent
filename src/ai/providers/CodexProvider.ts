@@ -30,12 +30,25 @@ export class CodexProvider extends BaseCliProvider {
       "--output-last-message",
       outputPath,
       "--skip-git-repo-check",
+      "--ignore-rules",
+      "--ignore-user-config",
+      "--ephemeral",
       "--cd",
       input.cwd,
       "--model",
       this.settings().codexModel,
       "--config",
-      `model_reasoning_effort="${this.settings().reasoningEffort}"`
+      `model_reasoning_effort="${this.settings().reasoningEffort}"`,
+      "--config",
+      "features.plugins=false",
+      "--config",
+      "features.apps=false",
+      "--config",
+      "mcp_servers={}",
+      "--config",
+      "plugins={}",
+      "--config",
+      "apps._default.enabled=false"
     ];
     yield* this.runProcess(resolution, args, input, prompt, outputPath);
   }
