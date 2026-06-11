@@ -7,7 +7,9 @@ export interface RhwpAiProviderSettings {
   claudeCliPath: string;
   codexCliPath: string;
   antigravityCliPath: string;
+  claudeModel: string;
   codexModel: string;
+  antigravityModel: string;
   reasoningEffort: "low" | "medium" | "high" | "xhigh";
   permissionMode: RhwpAiPermissionMode;
   environmentVariables: string;
@@ -46,7 +48,9 @@ export const DEFAULT_AI_PROVIDER_SETTINGS: RhwpAiProviderSettings = {
   claudeCliPath: "",
   codexCliPath: "",
   antigravityCliPath: "",
+  claudeModel: "",
   codexModel: "gpt-5.4",
+  antigravityModel: "",
   reasoningEffort: "high",
   permissionMode: "preview",
   environmentVariables: ""

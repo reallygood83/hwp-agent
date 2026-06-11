@@ -18,7 +18,12 @@ export class AntigravityProvider extends BaseCliProvider {
       `ai-rhwp-antigravity-${Date.now()}-${Math.random().toString(36).slice(2)}.log`
     );
     const prompt = this.buildOperationPrompt(input);
-    const args = ["--log-file", logPath, "--add-dir", input.cwd, "--print-timeout", "5m", "--print", prompt];
+    const model = this.settings().antigravityModel.trim();
+    const args = ["--log-file", logPath, "--add-dir", input.cwd, "--print-timeout", "5m"];
+    if (model) {
+      args.push("--model", model);
+    }
+    args.push("--print", prompt);
     yield { type: "progress", content: `Antigravity log: ${logPath}` };
     yield* this.runProcess(this.resolve(), args, input);
   }

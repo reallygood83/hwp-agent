@@ -183,6 +183,13 @@ const I18N = {
     settingTitle: "HWP Agent - AI rHWP Editor",
     settingAiProviderName: "Default AI provider",
     settingAiProviderDesc: "Choose the local CLI used for operation planning.",
+    settingClaudeModelName: "Claude Code model",
+    settingClaudeModelDesc: "Choose the Claude Code model passed with --model. Use CLI default to let Claude Code decide.",
+    settingCodexModelName: "Codex model",
+    settingCodexModelDesc: "Choose the Codex model passed with --model. gpt-5.4 remains the plugin default.",
+    settingAntigravityModelName: "Antigravity model",
+    settingAntigravityModelDesc: "Choose the Antigravity model passed with --model. The list matches agy models on this machine.",
+    settingModelCliDefault: "CLI default",
     settingAutoDetectCliName: "Auto-detect AI CLI paths",
     settingAutoDetectCliDesc: "Find Claude Code, Codex, and Antigravity on PATH and common macOS, Linux, Windows, and WSL install locations.",
     settingAutoDetectCliButton: "Detect now",
@@ -294,6 +301,13 @@ const I18N = {
     settingTitle: "HWP Agent - AI rHWP Editor",
     settingAiProviderName: "기본 AI 제공자",
     settingAiProviderDesc: "AI 작업 생성에 사용할 로컬 CLI를 선택합니다.",
+    settingClaudeModelName: "Claude Code 모델",
+    settingClaudeModelDesc: "Claude Code 실행 시 --model로 넘길 모델입니다. CLI 기본값을 고르면 Claude Code가 직접 선택합니다.",
+    settingCodexModelName: "Codex 모델",
+    settingCodexModelDesc: "Codex 실행 시 --model로 넘길 모델입니다. 플러그인 기본값은 gpt-5.4입니다.",
+    settingAntigravityModelName: "Antigravity 모델",
+    settingAntigravityModelDesc: "Antigravity 실행 시 --model로 넘길 모델입니다. 이 목록은 이 컴퓨터의 agy models 기준입니다.",
+    settingModelCliDefault: "CLI 기본값",
     settingAutoDetectCliName: "AI CLI 경로 자동 감지",
     settingAutoDetectCliDesc: "PATH와 macOS, Linux, Windows, WSL의 일반 설치 위치에서 Claude Code, Codex, Antigravity를 찾습니다.",
     settingAutoDetectCliButton: "지금 감지",
@@ -2231,6 +2245,62 @@ class RhwpSettingTab extends PluginSettingTab {
       });
 
     new Setting(containerEl)
+      .setName(t("settingClaudeModelName"))
+      .setDesc(t("settingClaudeModelDesc"))
+      .addDropdown((dropdown) => {
+        dropdown
+          .addOption("", t("settingModelCliDefault"))
+          .addOption("sonnet", "Sonnet (alias)")
+          .addOption("opus", "Opus (alias)")
+          .addOption("claude-sonnet-4-6", "Claude Sonnet 4.6")
+          .addOption("claude-opus-4-6", "Claude Opus 4.6")
+          .setValue(this.rhwpPlugin.settings.ai.claudeModel)
+          .onChange(async (value) => {
+            this.rhwpPlugin.settings.ai.claudeModel = value;
+            await this.rhwpPlugin.saveSettings();
+          });
+      });
+
+    new Setting(containerEl)
+      .setName(t("settingCodexModelName"))
+      .setDesc(t("settingCodexModelDesc"))
+      .addDropdown((dropdown) => {
+        dropdown
+          .addOption("", t("settingModelCliDefault"))
+          .addOption("gpt-5.5", "gpt-5.5")
+          .addOption("gpt-5.4", "gpt-5.4")
+          .addOption("gpt-5.4-mini", "gpt-5.4-mini")
+          .addOption("gpt-5.3-codex-spark", "gpt-5.3-codex-spark")
+          .addOption("gpt-5.3", "gpt-5.3")
+          .setValue(this.rhwpPlugin.settings.ai.codexModel)
+          .onChange(async (value) => {
+            this.rhwpPlugin.settings.ai.codexModel = value;
+            await this.rhwpPlugin.saveSettings();
+          });
+      });
+
+    new Setting(containerEl)
+      .setName(t("settingAntigravityModelName"))
+      .setDesc(t("settingAntigravityModelDesc"))
+      .addDropdown((dropdown) => {
+        dropdown
+          .addOption("", t("settingModelCliDefault"))
+          .addOption("Gemini 3.5 Flash (Medium)", "Gemini 3.5 Flash (Medium)")
+          .addOption("Gemini 3.5 Flash (High)", "Gemini 3.5 Flash (High)")
+          .addOption("Gemini 3.5 Flash (Low)", "Gemini 3.5 Flash (Low)")
+          .addOption("Gemini 3.1 Pro (Low)", "Gemini 3.1 Pro (Low)")
+          .addOption("Gemini 3.1 Pro (High)", "Gemini 3.1 Pro (High)")
+          .addOption("Claude Sonnet 4.6 (Thinking)", "Claude Sonnet 4.6 (Thinking)")
+          .addOption("Claude Opus 4.6 (Thinking)", "Claude Opus 4.6 (Thinking)")
+          .addOption("GPT-OSS 120B (Medium)", "GPT-OSS 120B (Medium)")
+          .setValue(this.rhwpPlugin.settings.ai.antigravityModel)
+          .onChange(async (value) => {
+            this.rhwpPlugin.settings.ai.antigravityModel = value;
+            await this.rhwpPlugin.saveSettings();
+          });
+      });
+
+    new Setting(containerEl)
       .setName(t("settingAutoDetectCliName"))
       .setDesc(t("settingAutoDetectCliDesc"))
       .addButton((button) => {
@@ -2336,7 +2406,9 @@ function parseSettings(data: unknown): Partial<RhwpSettings> {
     if (typeof ai.claudeCliPath === "string") settings.ai.claudeCliPath = ai.claudeCliPath;
     if (typeof ai.codexCliPath === "string") settings.ai.codexCliPath = ai.codexCliPath;
     if (typeof ai.antigravityCliPath === "string") settings.ai.antigravityCliPath = ai.antigravityCliPath;
-    if (typeof ai.codexModel === "string" && ai.codexModel.trim()) settings.ai.codexModel = ai.codexModel;
+    if (typeof ai.claudeModel === "string") settings.ai.claudeModel = ai.claudeModel;
+    if (typeof ai.codexModel === "string") settings.ai.codexModel = ai.codexModel;
+    if (typeof ai.antigravityModel === "string") settings.ai.antigravityModel = ai.antigravityModel;
     if (ai.reasoningEffort === "low" || ai.reasoningEffort === "medium" || ai.reasoningEffort === "high" || ai.reasoningEffort === "xhigh") {
       settings.ai.reasoningEffort = ai.reasoningEffort;
     }

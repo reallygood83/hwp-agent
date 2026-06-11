@@ -19,6 +19,7 @@ export class CodexProvider extends BaseCliProvider {
     );
     const prompt = this.buildOperationPrompt(input);
     const resolution = this.resolve();
+    const model = this.settings().codexModel.trim();
     const args = [
       "--sandbox",
       "workspace-write",
@@ -34,9 +35,12 @@ export class CodexProvider extends BaseCliProvider {
       "--ignore-user-config",
       "--ephemeral",
       "--cd",
-      input.cwd,
-      "--model",
-      this.settings().codexModel,
+      input.cwd
+    ];
+    if (model) {
+      args.push("--model", model);
+    }
+    args.push(
       "--config",
       `model_reasoning_effort="${this.settings().reasoningEffort}"`,
       "--config",
@@ -51,7 +55,7 @@ export class CodexProvider extends BaseCliProvider {
       "plugins={}",
       "--config",
       "apps._default.enabled=false"
-    ];
+    );
     yield* this.runProcess(resolution, args, input, prompt, outputPath);
   }
 }

@@ -11,7 +11,8 @@ export class ClaudeCodeProvider extends BaseCliProvider {
 
   async *query(input: RhwpAiQuery): AsyncGenerator<RhwpAiEvent> {
     const prompt = this.buildOperationPrompt(input);
-    yield* this.runProcess(this.resolve(), ["-p", prompt], input);
+    const model = this.settings().claudeModel.trim();
+    const args = model ? ["--model", model, "-p", prompt] : ["-p", prompt];
+    yield* this.runProcess(this.resolve(), args, input);
   }
 }
-
