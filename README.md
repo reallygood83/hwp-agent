@@ -5,6 +5,18 @@ Obsidian, rHWP, and local AI CLIs so Claude Code, Codex, and Antigravity can rea
 the current HWP/HWPX document and propose safe rHWP operations for text, tables,
 images, and generated document blocks.
 
+This project is built with reference to the Obsidian community plugin
+[rHWP Editor](https://community.obsidian.md/plugins/rhwp-editor). The original
+plugin established the rHWP-based HWP/HWPX editing experience in Obsidian; this
+repository extends that direction with AI-assisted document reading, planning,
+and controlled rHWP operation execution.
+
+이 프로젝트는 Obsidian 커뮤니티 플러그인
+[rHWP Editor](https://community.obsidian.md/plugins/rhwp-editor)를 참고하여
+개발되었습니다. 기존 플러그인이 Obsidian 안에서 rHWP 기반 HWP/HWPX 편집
+경험을 제공한 흐름을 바탕으로, 이 저장소는 AI가 문서를 읽고 작업을 계획한 뒤
+검증된 rHWP 작업만 실행하는 방향으로 확장합니다.
+
 The implementation spec lives in [`prj/AI_RHWP_PLUGIN_SPEC.md`](prj/AI_RHWP_PLUGIN_SPEC.md).
 The OOO QA plan lives in [`prj/OOO_QA.md`](prj/OOO_QA.md).
 
@@ -26,11 +38,14 @@ Open, create, and edit `.hwp` and `.hwpx` files in Obsidian Desktop with [rhwp](
 3. Enter `https://github.com/reallygood83/hwp-agent`.
 4. Enable `AI rHWP Editor` in Obsidian community plugins.
 
+Latest release: [`0.1.1`](https://github.com/reallygood83/hwp-agent/releases/tag/0.1.1)
+
 ## AI features
 
 - Reads the current rHWP-rendered document context for AI prompting.
 - Connects to Claude Code, Codex CLI, and Antigravity CLI through configurable local commands.
-- Uses a validated JSON operation envelope before future auto-apply editing.
+- Uses a validated JSON operation envelope before applying AI edits.
+- Applies supported operations through rHWP core APIs, including text insertion, text replacement, table creation/cell edits, and vault image insertion.
 - Keeps Windows support in the provider layer with `.cmd`, PowerShell-friendly command lookup, and WSL fallback candidates.
 
 ## Features
