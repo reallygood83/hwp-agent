@@ -135,6 +135,7 @@ const I18N = {
     aiTablePrompt: "이 HWP/HWPX 문서를 읽고 현재 문맥에 맞는 편집 가능한 표를 삽입해줘. 표의 제목, 열 이름, 행 예시를 문서 내용에 맞게 구성하고, 유효한 operation JSON만 반환해줘.",
     aiImagePrompt: "이 HWP/HWPX 문서를 읽고 볼트에 있는 이미지를 현재 문맥에 맞는 위치에 삽입해줘. 이미지 경로가 필요하면 어떤 이미지를 넣어야 하는지 한국어로 명확히 요청하고, 적용 가능하면 유효한 operation JSON만 반환해줘.",
     aiCodexImagePrompt: "이 HWP/HWPX 문서를 읽고 현재 문맥에 가장 잘 맞는 이미지를 Codex CLI에서 gpt-image-2 이미지 모델로 생성해줘. HWP 파일은 직접 수정하지 말고, 생성 이미지만 볼트의 .rhwp-agent/images 폴더 아래 PNG 파일로 저장한 뒤, 그 이미지 경로를 source.kind가 generated_file인 insert_image operation JSON으로 반환해줘. 이미지 내용은 한국어 문서 맥락에 맞게 만들고, 반환은 유효한 operation JSON만 해줘.",
+    aiAntigravityImagePrompt: "이 HWP/HWPX 문서를 읽고 현재 문맥에 가장 잘 맞는 이미지를 Antigravity CLI에서 Nano Banana 또는 Nano Banana Pro 이미지 생성 기능으로 생성해줘. HWP 파일은 직접 수정하지 말고, 생성 이미지만 볼트의 .rhwp-agent/images 폴더 아래 PNG/JPEG 파일로 저장한 뒤, 그 이미지 경로를 source.kind가 generated_file인 insert_image operation JSON으로 반환해줘. 이미지 내용은 한국어 문서 맥락에 맞게 만들고, 반환은 유효한 operation JSON만 해줘.",
     aiReadContext: "문서 읽기",
     aiDiagnose: "진단",
     aiPlan: "AI 생성",
@@ -245,6 +246,7 @@ const I18N = {
     aiTablePrompt: "이 HWP/HWPX 문서를 읽고 현재 문맥에 맞는 편집 가능한 표를 삽입해줘. 표의 제목, 열 이름, 행 예시를 문서 내용에 맞게 구성하고, 유효한 operation JSON만 반환해줘.",
     aiImagePrompt: "이 HWP/HWPX 문서를 읽고 볼트에 있는 이미지를 현재 문맥에 맞는 위치에 삽입해줘. 이미지 경로가 필요하면 어떤 이미지를 넣어야 하는지 한국어로 명확히 요청하고, 적용 가능하면 유효한 operation JSON만 반환해줘.",
     aiCodexImagePrompt: "이 HWP/HWPX 문서를 읽고 현재 문맥에 가장 잘 맞는 이미지를 Codex CLI에서 gpt-image-2 이미지 모델로 생성해줘. HWP 파일은 직접 수정하지 말고, 생성 이미지만 볼트의 .rhwp-agent/images 폴더 아래 PNG 파일로 저장한 뒤, 그 이미지 경로를 source.kind가 generated_file인 insert_image operation JSON으로 반환해줘. 이미지 내용은 한국어 문서 맥락에 맞게 만들고, 반환은 유효한 operation JSON만 해줘.",
+    aiAntigravityImagePrompt: "이 HWP/HWPX 문서를 읽고 현재 문맥에 가장 잘 맞는 이미지를 Antigravity CLI에서 Nano Banana 또는 Nano Banana Pro 이미지 생성 기능으로 생성해줘. HWP 파일은 직접 수정하지 말고, 생성 이미지만 볼트의 .rhwp-agent/images 폴더 아래 PNG/JPEG 파일로 저장한 뒤, 그 이미지 경로를 source.kind가 generated_file인 insert_image operation JSON으로 반환해줘. 이미지 내용은 한국어 문서 맥락에 맞게 만들고, 반환은 유효한 operation JSON만 해줘.",
     aiReadContext: "문서 읽기",
     aiDiagnose: "진단",
     aiPlan: "AI 생성",
@@ -1331,7 +1333,9 @@ class RhwpFileView extends FileView {
   }
 
   private getImagePrompt(): string {
-    return this.plugin.settings.aiProvider === "codex" ? t("aiCodexImagePrompt") : t("aiImagePrompt");
+    if (this.plugin.settings.aiProvider === "codex") return t("aiCodexImagePrompt");
+    if (this.plugin.settings.aiProvider === "antigravity") return t("aiAntigravityImagePrompt");
+    return t("aiImagePrompt");
   }
 
   private async openAgentAndRun(action: () => Promise<void>): Promise<void> {

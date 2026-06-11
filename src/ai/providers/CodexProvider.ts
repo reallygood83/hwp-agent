@@ -40,6 +40,8 @@ export class CodexProvider extends BaseCliProvider {
       "--config",
       `model_reasoning_effort="${this.settings().reasoningEffort}"`,
       "--config",
+      "features.image_generation=true",
+      "--config",
       "features.plugins=false",
       "--config",
       "features.apps=false",

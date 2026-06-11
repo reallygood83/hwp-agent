@@ -22,7 +22,7 @@ The OOO QA plan lives in [`prj/OOO_QA.md`](prj/OOO_QA.md).
 
 ---
 
-[![Version](https://img.shields.io/badge/version-0.2.9-blue?style=flat-square)](https://github.com/reallygood83/hwp-agent)
+[![Version](https://img.shields.io/badge/version-0.2.10-blue?style=flat-square)](https://github.com/reallygood83/hwp-agent)
 [![License](https://img.shields.io/github/license/reallygood83/hwp-agent?style=flat-square)](LICENSE)
 [![Obsidian](https://img.shields.io/badge/Obsidian-desktop%20plugin-7C3AED?style=flat-square)](https://obsidian.md)
 [![HWP/HWPX](https://img.shields.io/badge/HWP%2FHWPX-rhwp-2F855A?style=flat-square)](https://github.com/edwardkim/rhwp)
@@ -39,7 +39,7 @@ Open, create, and edit `.hwp` and `.hwpx` files in Obsidian Desktop with [rhwp](
 4. In `Settings > Community plugins > Installed plugins`, search for `HWP Agent` or `AI rHWP Editor`.
 5. Enable `HWP Agent - AI rHWP Editor`.
 
-Latest release: [`0.2.9`](https://github.com/reallygood83/hwp-agent/releases/tag/0.2.9)
+Latest release: [`0.2.10`](https://github.com/reallygood83/hwp-agent/releases/tag/0.2.10)
 
 BRAT installs the plugin files first, but Obsidian may still require manually
 enabling the installed plugin. The plugin folder/id is `ai-rhwp-editor`; the
