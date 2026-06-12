@@ -702,16 +702,9 @@ export default class RhwpPlugin extends Plugin {
   }
 
   private async installReleaseAssets(): Promise<void> {
-    const response = await requestUrl({
-      url: this.getReleaseZipUrl(),
-      method: "GET"
-    });
+    const archiveBytes = await this.readLocalReleaseZip() ?? await this.downloadReleaseZip();
 
-    if (response.status < 200 || response.status >= 300) {
-      throw new Error(`GitHub release asset returned HTTP ${response.status}.`);
-    }
-
-    for (const entry of extractZipEntries(response.arrayBuffer)) {
+    for (const entry of extractZipEntries(toArrayBuffer(archiveBytes))) {
       const relativePath = normalizeZipPath(entry.path);
       if (!relativePath || !isInstallableAssetPath(relativePath)) {
         continue;
@@ -731,8 +724,37 @@ export default class RhwpPlugin extends Plugin {
     }
   }
 
-  private getReleaseZipUrl(): string {
-    return `https://github.com/reallygood83/hwp-agent/releases/download/${this.manifest.version}/${RELEASE_ZIP_NAME}`;
+  private async readLocalReleaseZip(): Promise<Uint8Array | null> {
+    const zipPath = this.getPluginPath(RELEASE_ZIP_NAME);
+    if (!(await this.app.vault.adapter.exists(zipPath))) {
+      return null;
+    }
+
+    return new Uint8Array(await this.app.vault.adapter.readBinary(zipPath));
+  }
+
+  private async downloadReleaseZip(): Promise<Uint8Array> {
+    const errors: string[] = [];
+
+    for (const url of this.getReleaseZipUrls()) {
+      try {
+        const response = await requestUrl({ url, method: "GET" });
+        if (response.status >= 200 && response.status < 300) {
+          return new Uint8Array(response.arrayBuffer);
+        }
+        errors.push(`${url}: HTTP ${response.status}`);
+      } catch (error) {
+        errors.push(`${url}: ${getErrorMessage(error)}`);
+      }
+    }
+
+    throw new Error(`Could not download ${RELEASE_ZIP_NAME}. ${errors.join(" | ")}`);
+  }
+
+  private getReleaseZipUrls(): string[] {
+    const version = this.manifest.version;
+    const tags = version.startsWith("v") ? [version, version.slice(1)] : [`v${version}`, version];
+    return tags.map((tag) => `https://github.com/reallygood83/hwp-agent/releases/download/${tag}/${RELEASE_ZIP_NAME}`);
   }
 
   private async writeAssetMarker(): Promise<void> {
