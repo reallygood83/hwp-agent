@@ -56,6 +56,10 @@ type NewFileFormat = "hwp" | "hwpx";
 type LargeFileBehavior = "ask" | "open";
 type EditLeaveAction = "keep" | "discard" | "save";
 
+interface RhwpEditorWithRequest extends RhwpEditor {
+  _request?: (method: string, params?: Record<string, unknown>) => Promise<unknown>;
+}
+
 interface RhwpSettings {
   newFileFormat: NewFileFormat;
   largeFileBehavior: LargeFileBehavior;
@@ -173,6 +177,7 @@ const I18N = {
     aiImageAutoApplying: "Image operation detected. Inserting the generated image into the HWP/HWPX document...",
     aiSelectionEmpty: "드래그로 선택된 텍스트를 찾지 못했습니다. 편집 영역에서 텍스트를 선택한 뒤 다시 눌러 주세요.",
     aiSelectionCaptured: "선택 영역 {{count}}자를 AI 컨텍스트로 사용합니다.",
+    aiSelectionLogSaved: "Selection diagnostic log was saved to {{path}}.",
     aiSelectionPrompt: "아래 선택 영역만 문맥으로 보고, 내 요청에 맞게 한국어로 자연스럽게 수정한 뒤 선택 영역을 대치하는 replace_selection 작업 JSON만 만들어줘.",
     settingFormatDesc: "HWP is the default because HWPX export/rendering is still less consistent in rhwp.",
     settingFormatName: "New file format",
@@ -293,6 +298,7 @@ const I18N = {
     aiImageAutoApplying: "이미지 작업을 감지했습니다. 생성된 이미지를 HWP/HWPX 문서에 바로 삽입합니다...",
     aiSelectionEmpty: "드래그로 선택된 텍스트를 찾지 못했습니다. 편집 영역에서 텍스트를 선택한 뒤 다시 눌러 주세요.",
     aiSelectionCaptured: "선택 영역 {{count}}자를 AI 컨텍스트로 사용합니다.",
+    aiSelectionLogSaved: "선택 영역 진단 로그를 {{path}}에 저장했습니다.",
     aiSelectionPrompt: "아래 선택 영역만 문맥으로 보고, 내 요청에 맞게 한국어로 자연스럽게 수정한 뒤 선택 영역을 대치하는 replace_selection 작업 JSON만 만들어줘.",
     settingFormatDesc: "rhwp의 HWPX 내보내기/렌더링 일관성이 아직 낮아서 HWP를 기본값으로 둡니다.",
     settingFormatName: "새 파일 형식",
@@ -553,7 +559,7 @@ export default class RhwpPlugin extends Plugin {
       }
     }
 
-    mainJs = this.rewriteStudioJavaScriptUrls(mainJs);
+    mainJs = injectStudioSelectionBridge(this.rewriteStudioJavaScriptUrls(mainJs));
     await this.writeGeneratedAsset(generatedMainPath, mainJs);
 
     const styleCss = await this.app.vault.adapter.read(this.getPluginPath(sourceStylePath));
@@ -1486,7 +1492,7 @@ class RhwpFileView extends FileView {
     setIcon(button, icon);
     button.createSpan({ text: label });
     button.addEventListener("pointerdown", () => {
-      this.captureLiveSelectionIfPresent();
+      void this.captureLiveSelectionIfPresent();
     });
     button.addEventListener("click", () => {
       void handler();
@@ -1568,11 +1574,14 @@ class RhwpFileView extends FileView {
   }
 
   private async captureSelectedContext(): Promise<void> {
-    const selected = this.readCurrentSelection();
+    const selected = await this.readCurrentSelection();
     if (!selected) {
       this.lastSelectedContext = null;
       this.updateAiPanelStatus();
+      const logPath = await this.saveSelectionDiagnostic();
+      const logMessage = logPath ? `\n${t("aiSelectionLogSaved", { path: logPath })}` : "";
       new Notice(t("aiSelectionEmpty"));
+      this.writeAiOutput(`${t("aiSelectionEmpty")}${logMessage}`, true);
       return;
     }
 
@@ -1595,7 +1604,12 @@ class RhwpFileView extends FileView {
     this.writeAiOutput(JSON.stringify({ selectedContext: this.lastSelectedContext }, null, 2));
   }
 
-  private readCurrentSelection(): { text: string; source: RhwpSelectionContext["source"] } | null {
+  private async readCurrentSelection(): Promise<{ text: string; source: RhwpSelectionContext["source"] } | null> {
+    const bridgeSelection = await this.readEditorSelectionTextFromBridge();
+    if (bridgeSelection) {
+      return { text: bridgeSelection, source: "editor_bridge" };
+    }
+
     const editorSelection = this.readEditorSelectionText();
     if (editorSelection) {
       return { text: editorSelection, source: "editor_selection" };
@@ -1607,6 +1621,26 @@ class RhwpFileView extends FileView {
     }
 
     return null;
+  }
+
+  private async readEditorSelectionTextFromBridge(): Promise<string> {
+    const editor = this.editor as RhwpEditorWithRequest | null;
+    if (!editor?._request) return "";
+
+    try {
+      const result = await editor._request("getSelectedText");
+      if (isPlainRecord(result) && typeof result.text === "string") {
+        const selectedText = result.text.trim();
+        if (selectedText) {
+          this.cachedEditorSelectionText = selectedText;
+          return selectedText;
+        }
+      }
+    } catch {
+      return "";
+    }
+
+    return "";
   }
 
   private readEditorSelectionText(): string {
@@ -1753,7 +1787,7 @@ class RhwpFileView extends FileView {
     }
     if (!this.lastDocumentContext) return false;
 
-    this.captureLiveSelectionIfPresent();
+    await this.captureLiveSelectionIfPresent();
     this.lastDocumentContext.selectedText = this.lastSelectedContext;
 
     if (this.aiPromptEl && !this.aiPromptEl.value.trim()) {
@@ -1864,14 +1898,50 @@ class RhwpFileView extends FileView {
     }
   }
 
+  private async saveSelectionDiagnostic(): Promise<string | null> {
+    if (!this.currentFile) return null;
+
+    const iframe = this.editor?.element;
+    const logDir = ".rhwp-agent/logs";
+    const logPath = `${logDir}/selection-${formatLogTimestamp(new Date())}.json`;
+    try {
+      await ensureAdapterFolder(this.app, logDir);
+      await this.app.vault.adapter.write(
+        logPath,
+        JSON.stringify(
+          {
+            createdAt: new Date().toISOString(),
+            provider: this.plugin.settings.aiProvider,
+            file: this.currentFile.path,
+            mode: this.mode,
+            hasEditor: !!this.editor,
+            hasIframe: !!iframe,
+            hasIframeContentWindow: !!iframe?.contentWindow,
+            hasIframeContentDocument: !!iframe?.contentDocument,
+            cachedEditorSelectionLength: this.cachedEditorSelectionText.length,
+            editorBridgeAvailable: typeof (this.editor as RhwpEditorWithRequest | null)?._request === "function",
+            iframeWindowSelection: readSafeSelection(() => iframe?.contentWindow?.getSelection?.()?.toString()),
+            iframeDocumentSelection: readSafeSelection(() => iframe?.contentDocument?.getSelection?.()?.toString()),
+            obsidianWindowSelection: readSafeSelection(() => window.getSelection?.()?.toString())
+          },
+          null,
+          2
+        )
+      );
+      return logPath;
+    } catch {
+      return null;
+    }
+  }
+
   private shouldAutoApplyImageOperation(envelope: RhwpOperationEnvelope): boolean {
     return this.autoApplyNextImageOperation &&
       envelope.operations.length > 0 &&
       envelope.operations.every((operation) => operation.type === "insert_image");
   }
 
-  private captureLiveSelectionIfPresent(): void {
-    const selected = this.readCurrentSelection();
+  private async captureLiveSelectionIfPresent(): Promise<void> {
+    const selected = await this.readCurrentSelection();
     if (!selected) return;
 
     this.lastSelectedContext = {
@@ -2912,8 +2982,29 @@ function toJavaScriptStringContent(value: string, quote: string): string {
   return escaped.replace(new RegExp(`\\${quote}`, "g"), `\\${quote}`);
 }
 
+function injectStudioSelectionBridge(js: string): string {
+  if (js.includes("case`getSelectedText`")) return js;
+
+  const needle = "case`exportHwpVerify`:await xu,a(JSON.parse(X.exportHwpVerify()));break;default:";
+  const replacement = [
+    "case`exportHwpVerify`:await xu,a(JSON.parse(X.exportHwpVerify()));break;",
+    "case`getSelectedText`:await xu,a((()=>{try{let e=$;if(!e?.cursor?.hasSelection?.())return{text:``,selection:null};let t=e.cursor.getSelectionOrdered?.();if(!t)return{text:``,selection:null};let{start:n,end:r}=t;if(n.parentParaIndex===void 0)X.copySelection(n.sectionIndex,n.paragraphIndex,n.charOffset,r.paragraphIndex,r.charOffset);else X.copySelectionInCell(n.sectionIndex,n.parentParaIndex,n.controlIndex,n.cellIndex,n.cellParaIndex,n.charOffset,r.cellParaIndex,r.charOffset);return{text:X.getClipboardText?.()||``,selection:t}}catch(e){return{text:``,selection:null,error:e?.message||String(e)}}})());break;",
+    "default:"
+  ].join("");
+
+  return js.replace(needle, replacement);
+}
+
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function readSafeSelection(read: () => string | undefined): string {
+  try {
+    return read()?.trim() ?? "";
+  } catch {
+    return "";
+  }
 }
 
 async function ensureAdapterFolder(app: App, folderPath: string): Promise<void> {

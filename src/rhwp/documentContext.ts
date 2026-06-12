@@ -25,7 +25,7 @@ export interface RhwpImageContext {
 
 export interface RhwpSelectionContext {
   text: string;
-  source: "editor_selection" | "obsidian_selection";
+  source: "editor_bridge" | "editor_selection" | "obsidian_selection";
   capturedAt: string;
 }
 
